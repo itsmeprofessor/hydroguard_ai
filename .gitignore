@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment
+.env
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# ML artifacts (kept in volumes / object storage in prod)
+backend/saved_models/**/*.keras
+backend/saved_models/**/*.joblib
+!backend/saved_models/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter / Dart build artifacts
+weather_anomaly_app/.dart_tool/
+weather_anomaly_app/build/
+weather_anomaly_app/.flutter-plugins-dependencies
+weather_anomaly_app/android/local.properties
+weather_anomaly_app/ios/Flutter/ephemeral/
+weather_anomaly_app/macos/Flutter/ephemeral/
+weather_anomaly_app/windows/flutter/ephemeral/
+weather_anomaly_app/linux/flutter/ephemeral/
+weather_anomaly_app/pubspec.lock
+
+# Evaluation artifacts (large CSVs)
+backend/evaluation_results/*.csv

@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>HydroGuard AI — Admin Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+/* ── Design tokens ── */
+:root {
+  --bg:       #0d1117;
+  --bg1:      #111827;
+  --panel:    #1a2233;
+  --panel2:   #1e2a3d;
+  --panel3:   #243047;
+  --border:   #2d3a52;
+  --text:     #f1f5f9;
+  --muted:    #8da3be;
+  --dim:      #4f6481;
+  --hydro:    #5b8cf7;
+  --hydro-s:  rgba(91,140,247,.15);
+  --cyan:     #38bdf8;
+  --cyan-s:   rgba(56,189,248,.15);
+  --ok:       #34d399;
+  --warn:     #fbbf24;
+  --high:     #f97316;
+  --crit:     #ef4444;
+  --crit-s:   rgba(239,68,68,.15);
+  --radius:   8px;
+  --radius-lg:12px;
+  --mono:     'JetBrains Mono', monospace;
+  --sans:     'Inter', system-ui, sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;-webkit-font-smoothing:antialiased}
+a{color:var(--hydro);text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+input,select{font-family:inherit}
+
+/* ── Pages ── */
+.page{display:none;min-height:100vh}
+.page.active{display:flex}
+
+/* ── Landing ── */
+#pg-landing{
+  flex-direction:column;
+  background:
+    radial-gradient(900px 500px at 80% 10%, rgba(91,140,247,.25), transparent 60%),
+    radial-gradient(700px 400px at 10% 80%, rgba(56,189,248,.15), transparent 60%),
+    var(--bg);
+}
+.landing-nav{
+  display:flex;align-items:center;gap:14px;
+  padding:18px 40px;border-bottom:1px solid var(--border);
+}
+.brand-mark{
+  width:32px;height:32px;border-radius:8px;
+  background:linear-gradient(135deg,var(--hydro),var(--cyan));
+  display:grid;place-items:center;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 6px 20px -6px var(--hydro);
+}
+.brand-name{font-weight:700;font-size:15px;letter-spacing:-.01em}
+.brand-name span{color:var(--cyan)}
+.brand-sub{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.hero{
+  max-width:1100px;margin:0 auto;
+  padding:80px 40px 60px;
+  display:grid;grid-template-columns:1fr 420px;gap:60px;align-items:center;
+}
+.hero h1{
+  font-size:64px;line-height:.95;letter-spacing:-.03em;font-weight:700;
+  margin-bottom:20px;
+}
+.hero h1 em{font-style:italic;color:var(--cyan)}
+.hero p{font-size:16px;color:var(--muted);line-height:1.6;max-width:500px;margin-bottom:28px}
+.stats-row{display:flex;gap:32px;margin-top:32px}
+.stat-num{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--text)}
+.stat-label{font-size:11px;color:var(--muted);margin-top:2px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border-radius:20px;font-size:11px;
+  background:var(--crit-s);color:var(--crit);
+  border:1px solid rgba(239,68,68,.25);margin-bottom:20px;
+}
+.chip::before{content:'';width:6px;height:6px;background:var(--crit);border-radius:50%;animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}70%{box-shadow:0 0 0 8px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+.hero-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:20px;box-shadow:0 40px 80px -30px rgba(0,0,0,.7);
+}
+.trust-row{
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:22px 40px;
+}
+.trust-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:32px}
+.trust-inner span{color:var(--muted);font-size:13px}
+.features{max-width:1100px;margin:0 auto;padding:70px 40px}
+.features h2{font-size:36px;font-weight:600;letter-spacing:-.015em;margin-bottom:40px;max-width:600px}
+.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feature-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;
+}
+.feature-icon{
+  width:36px;height:36px;border-radius:8px;background:var(--panel2);
+  border:1px solid var(--border);display:grid;place-items:center;color:var(--cyan);
+  margin-bottom:14px;font-size:18px;
+}
+.feature-title{font-size:15px;font-weight:600;margin-bottom:6px}
+.feature-desc{font-size:13px;color:var(--muted);line-height:1.5}
+
+/* ── Auth ── */
+#pg-auth{
+  background:
+    radial-gradient(900px 500px at 50% -10%, rgba(91,140,247,.35), transparent 60%),
+    var(--bg);
+  display:grid;grid-template-columns:1fr 480px;
+}
+.auth-left{
+  padding:40px 48px;display:flex;flex-direction:column;
+  justify-content:space-between;border-right:1px solid var(--border);
+}
+.auth-right{
+  padding:40px;display:flex;flex-direction:column;
+  justify-content:center;background:var(--panel);
+}
+.auth-right h2{font-size:22px;font-weight:600;letter-spacing:-.01em;margin-bottom:6px}
+.auth-sub{color:var(--muted);font-size:13px;margin-bottom:28px}
+.field-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:6px;display:block}
+.field-wrap{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 12px;background:var(--panel2);
+  border:1px solid var(--border);border-radius:6px;margin-bottom:16px;
+}
+.field-wrap input{background:transparent;border:none;outline:none;color:var(--text);flex:1;font-size:13px;font-family:var(--sans)}
+.field-wrap input::placeholder{color:var(--dim)}
+.role-row{display:flex;gap:6px;margin-bottom:20px}
+.role-btn{
+  flex:1;padding:9px;border:1px solid var(--border);border-radius:6px;
+  background:var(--panel2);color:var(--muted);font-size:12px;text-align:center;
+  transition:.15s;
+}
+.role-btn.active{border-color:var(--hydro);background:var(--hydro-s);color:var(--text)}
+.btn-primary{
+  width:100%;padding:11px;border:none;border-radius:6px;
+  background:linear-gradient(135deg,var(--hydro),var(--cyan));
+  color:white;font-size:13px;font-weight:600;letter-spacing:.01em;
+  cursor:pointer;margin-bottom:10px;
+}
+.btn-primary:hover{opacity:.9}
+.auth-hint{font-family:var(--mono);font-size:10.5px;color:var(--dim);text-align:center}
+.auth-footer{display:flex;justify-content:space-between;margin-top:20px;font-size:12px;color:var(--muted)}
+.auth-footer a{color:var(--hydro);cursor:pointer}
+.alert-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:24px}
+.alert-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px}
+.ac-city{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--dim)}
+.ac-val{font-family:var(--mono);font-size:20px;margin-top:6px}
+.auth-security{font-family:var(--mono);font-size:10px;color:var(--dim)}
+
+/* ── App shell ── */
+#pg-app{flex-direction:row}
+.sidebar{
+  width:220px;flex-shrink:0;
+  background:color-mix(in srgb,var(--bg1),transparent 20%);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+.sb-brand{
+  display:flex;align-items:center;gap:10px;
+  padding:18px 16px 14px;border-bottom:1px solid var(--border);
+}
+.nav-group{padding:14px 10px 4px}
+.nav-group-title{
+  font-family:var(--mono);font-size:9px;text-transform:uppercase;
+  letter-spacing:.14em;color:var(--dim);padding:0 6px 8px;
+}
+.nav-item{
+  display:flex;align-items:center;gap:9px;padding:8px 10px;
+  border-radius:6px;cursor:pointer;font-size:13px;color:var(--muted);
+  transition:.12s;position:relative;
+}
+.nav-item:hover{background:var(--panel2);color:var(--text)}
+.nav-item.active{background:var(--hydro-s);color:var(--text);border:1px solid rgba(91,140,247,.2)}
+.nav-item .badge{
+  margin-left:auto;min-width:18px;height:18px;padding:0 5px;
+  background:var(--crit);border-radius:9px;
+  font-family:var(--mono);font-size:10px;color:white;
+  display:grid;place-items:center;
+}
+.nav-icon{width:16px;height:16px;flex-shrink:0}
+.sb-footer{
+  margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.avatar{
+  width:30px;height:30px;border-radius:50%;
+  background:linear-gradient(135deg,var(--hydro),var(--cyan));
+  display:grid;place-items:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;
+}
+.logout-btn{margin-left:auto;background:transparent;border:none;color:var(--dim);padding:4px;border-radius:4px;cursor:pointer}
+.logout-btn:hover{color:var(--crit)}
+
+/* ── Main content ── */
+.main{flex:1;overflow-y:auto;min-height:100vh;display:flex;flex-direction:column}
+.topbar{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 24px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--bg1);z-index:10;
+}
+.city-switcher{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 12px;border:1px solid var(--border);border-radius:6px;
+  background:var(--panel);font-size:12.5px;cursor:pointer;
+}
+.city-switcher:hover{border-color:var(--border);background:var(--panel2)}
+.topbar-spacer{flex:1}
+.status-badge{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 10px;border-radius:6px;font-family:var(--mono);font-size:10.5px;
+}
+.status-badge.crit{background:var(--crit-s);color:var(--crit)}
+.status-badge.ok{background:rgba(52,211,153,.12);color:var(--ok)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.6s infinite}
+.icon-btn{
+  background:var(--panel);border:1px solid var(--border);border-radius:6px;
+  padding:7px;color:var(--muted);cursor:pointer;
+}
+.icon-btn:hover{background:var(--panel2);color:var(--text)}
+
+/* ── Screens ── */
+.screen{display:none;padding:24px;animation:fadeIn .2s}
+.screen.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.page-sub{font-size:12px;color:var(--muted);margin-top:3px;font-family:var(--mono)}
+.page-actions{display:flex;gap:8px;align-items:center}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 12px;border:1px solid var(--border);border-radius:6px;
+  background:var(--panel);color:var(--muted);font-size:12.5px;
+  cursor:pointer;white-space:nowrap;
+}
+.btn:hover{background:var(--panel2);color:var(--text)}
+.btn.primary{background:var(--hydro);border-color:var(--hydro);color:white}
+.btn.primary:hover{opacity:.85}
+.btn.danger{background:var(--crit);border-color:var(--crit);color:white}
+
+/* ── Metrics grid ── */
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.metric-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:16px;
+}
+.mc-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.mc-val{font-family:var(--mono);font-size:28px;font-weight:600;line-height:1}
+.mc-val span{font-size:13px;color:var(--muted);font-weight:400}
+.mc-sub{font-size:11px;color:var(--muted);margin-top:6px}
+.mc-val.ok{color:var(--ok)}.mc-val.warn{color:var(--warn)}.mc-val.crit{color:var(--crit)}.mc-val.cyan{color:var(--cyan)}.mc-val.hydro{color:var(--hydro)}
+
+/* ── Cards ── */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:14px}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.card-title{font-size:14px;font-weight:600;margin-top:2px}
+.card-tag{
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;
+  padding:2px 8px;border-radius:4px;background:var(--crit-s);color:var(--crit);
+}
+.card-tag.ok{background:rgba(52,211,153,.12);color:var(--ok)}
+
+/* ── Two column layout ── */
+.dash-grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
+.dash-grid-3{display:grid;grid-template-columns:1fr 2fr 1fr;gap:14px;margin-bottom:14px}
+
+/* ── Anomaly score bar ── */
+.score-bar-wrap{height:5px;background:var(--panel3);border-radius:3px;overflow:hidden;margin:4px 0 12px}
+.score-bar{height:100%;border-radius:3px;transition:width .4s}
+
+/* ── Alert feed ── */
+.alert-row{display:grid;grid-template-columns:6px 1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.alert-row:last-child{border:none}
+.alert-stripe{border-radius:3px}
+.alert-stripe.crit{background:var(--crit)}.alert-stripe.warn{background:var(--warn)}.alert-stripe.info{background:var(--hydro)}
+.alert-title{font-size:13px;color:var(--text);font-weight:500}
+.alert-meta{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:2px}
+.alert-time{font-family:var(--mono);font-size:10px;color:var(--dim)}
+
+/* ── Table ── */
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;padding:8px 12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--border)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted)}
+.tbl td.strong{color:var(--text)}
+.tbl tr:last-child td{border:none}
+.tbl tr:hover td{background:var(--panel2)}
+
+/* ── Status tag ── */
+.status{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.status.crit{background:var(--crit-s);color:var(--crit)}
+.status.warn{background:rgba(251,191,36,.12);color:var(--warn)}
+.status.ok{background:rgba(52,211,153,.12);color:var(--ok)}
+.status.info{background:var(--hydro-s);color:var(--hydro)}
+.status .dt{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* ── Forecst strip ── */
+.fc-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-family:var(--mono);font-size:11px}
+.fc-bar-wrap{flex:1;height:4px;background:var(--panel3);border-radius:2px;overflow:hidden}
+.fc-bar{height:100%;border-radius:2px}
+
+/* ── City risk list ── */
+.city-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.city-row:last-child{border:none}
+.city-name{font-size:13px;font-weight:500;min-width:100px}
+.city-bar-wrap{flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden}
+.city-bar{height:100%;border-radius:3px}
+.city-hri{font-family:var(--mono);font-size:13px;font-weight:600;min-width:36px;text-align:right}
+
+/* ── Risk meter ── */
+.risk-meter{display:flex;gap:3px;margin:12px 0 6px}
+.risk-seg{flex:1;height:5px;background:var(--panel3);border-radius:2px}
+.risk-seg.on-low{background:var(--ok)}.risk-seg.on-med{background:var(--warn)}.risk-seg.on-high{background:var(--high)}.risk-seg.on-crit{background:var(--crit)}
+
+/* ── Gauge (CSS only) ── */
+.gauge-wrap{position:relative;width:96px;height:96px}
+.gauge-wrap canvas{position:absolute;top:0;left:0}
+.gauge-text{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge-num{font-family:var(--mono);font-size:20px;font-weight:700}
+.gauge-sub{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.1em}
+
+/* ── Predict form ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.form-field label{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+.form-field input,.form-field select{width:100%;padding:8px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12.5px;font-family:var(--sans)}
+.form-field input:focus,.form-field select:focus{outline:none;border-color:var(--hydro)}
+
+/* ── Result box ── */
+.result-box{
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  padding:12px;font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;
+  color:var(--muted);max-height:220px;overflow-y:auto;
+}
+
+/* ── HRI bar ── */
+.hri-wrap{display:flex;align-items:center;gap:10px;margin:10px 0}
+.hri-bar-bg{flex:1;height:8px;background:var(--panel3);border-radius:4px;overflow:hidden}
+.hri-bar-fill{height:100%;border-radius:4px;transition:width .4s}
+.hri-label-text{font-family:var(--mono);font-size:12px;font-weight:600;min-width:70px;text-align:right}
+
+/* ── Settings / Profile ── */
+.settings-section{margin-bottom:24px}
+.settings-section h3{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text)}
+.setting-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;background:var(--panel);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;
+}
+.setting-label{font-size:13px}
+.setting-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.toggle{width:40px;height:22px;border-radius:11px;border:none;cursor:pointer;position:relative;transition:.2s}
+.toggle.on{background:var(--hydro)}.toggle.off{background:var(--panel3)}
+.toggle::after{content:'';position:absolute;top:3px;width:16px;height:16px;border-radius:50%;background:white;transition:.2s}
+.toggle.on::after{left:21px}.toggle.off::after{left:3px}
+
+/* ── Spinner ── */
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none !important}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:3px}
+
+/* ── Crit banner ── */
+.crit-banner{
+  background:linear-gradient(90deg,rgba(77,27,27,0.9),rgba(45,17,17,0.9));
+  border:1px solid rgba(239,68,68,.4);border-radius:10px;padding:14px 16px;
+  display:flex;align-items:center;gap:14px;margin-bottom:16px;
+  animation:crit-glow 2s infinite;
+}
+@keyframes crit-glow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.3)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0)}}
+.crit-icon{width:36px;height:36px;background:var(--crit);border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+.crit-title{font-size:13px;font-weight:700;color:white}
+.crit-sub{font-family:var(--mono);font-size:11px;color:rgb(255,179,179);margin-top:2px}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ LANDING ═══════════════════ -->
+<div id="pg-landing" class="page active">
+  <nav class="landing-nav">
+    <div class="brand-mark">💧</div>
+    <div>
+      <div class="brand-name">HydroGuard <span>AI</span></div>
+      <div class="brand-sub">Cloudburst · Flash Flood · Early Warning</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;gap:22px;font-size:12.5px;color:var(--muted)">
+      <span style="cursor:pointer">Platform</span>
+      <span style="cursor:pointer">Technology</span>
+      <span style="cursor:pointer">Deployments</span>
+    </div>
+    <button class="btn" onclick="show('pg-auth')">🔒 Sign in</button>
+    <button class="btn primary" onclick="show('pg-auth')">Request demo →</button>
+  </nav>
+
+  <div class="hero">
+    <div>
+      <div class="chip">LIVE · 3 critical events active</div>
+      <h1>Predict before<br/>it <em>strikes.</em></h1>
+      <p>HydroGuard AI is a mission-critical platform for cloudburst and flash flood early warning. Autoencoder anomaly models deliver sub-second risk signals giving response teams a 27-minute mean lead time.</p>
+      <div style="display:flex;gap:10px">
+        <button class="btn primary" onclick="show('pg-auth')">View live dashboard →</button>
+        <button class="btn">👁 Watch demo</button>
+      </div>
+      <div class="stats-row">
+        <div><div class="stat-num">27</div><div class="stat-label">min mean lead time</div></div>
+        <div><div class="stat-num">92.4%</div><div class="stat-label">precision · F1 0.924</div></div>
+        <div><div class="stat-num">8</div><div class="stat-label">cities · 48 sensors</div></div>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--crit)">● LIVE · ISB · 09:41 PKT</span>
+        <span class="status crit"><span class="dt"></span>CRITICAL</span>
+      </div>
+      <canvas id="hero-chart" height="120"></canvas>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px">
+        <div style="padding:10px;background:var(--panel2);border-radius:6px">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.12em">RAINFALL</div>
+          <div style="font-family:var(--mono);font-size:20px;color:var(--crit);margin-top:4px">112.4<span style="font-size:10px;color:var(--muted)">mm/h</span></div>
+        </div>
+        <div style="padding:10px;background:var(--panel2);border-radius:6px">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.12em">ANOMALY</div>
+          <div style="font-family:var(--mono);font-size:20px;color:var(--crit);margin-top:4px">0.942</div>
+        </div>
+        <div style="padding:10px;background:var(--panel2);border-radius:6px">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.12em">CONF</div>
+          <div style="font-family:var(--mono);font-size:20px;margin-top:4px">97<span style="font-size:10px;color:var(--muted)">%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="trust-row">
+    <div class="trust-inner">
+      <span style="font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.16em;text-transform:uppercase">Trusted by</span>
+      <span>NDMA · Pakistan</span><span>PMD · Met Office</span><span>CDA · Islamabad</span>
+      <span>Punjab Disaster Mgmt</span><span>Sindh PDMA</span><span>KPK Smart City</span>
+    </div>
+  </div>
+
+  <div class="features">
+    <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:10px">Capabilities</div>
+    <h2>A full operating picture for the moments weather turns hostile.</h2>
+    <div class="feature-grid">
+      <div class="feature-card"><div class="feature-icon">🧠</div><div class="feature-title">Autoencoder anomaly detection</div><div class="feature-desc">A bottlenecked neural network continuously reconstructs the expected hydrometeorological state. When reality diverges, we know first.</div></div>
+      <div class="feature-card"><div class="feature-icon">📡</div><div class="feature-title">Real-time multi-sensor fusion</div><div class="feature-desc">Rainfall, pressure, doppler radar, flow, and level streams fuse at sub-second latency. 47/48 sources online.</div></div>
+      <div class="feature-card"><div class="feature-icon">⛈</div><div class="feature-title">Cloudburst detection engine</div><div class="feature-desc">Dedicated pipeline for extreme precipitation with calibrated per-city baselines and ensemble blending.</div></div>
+      <div class="feature-card"><div class="feature-icon">🌊</div><div class="feature-title">Flash flood risk modeling</div><div class="feature-desc">Terrain + rainfall + drainage capacity composite with a 6h forecast window and scenario simulation.</div></div>
+      <div class="feature-card"><div class="feature-icon">🏙</div><div class="feature-title">Multi-city intelligent models</div><div class="feature-desc">Eight cities live today with per-city thresholds and dedicated model heads.</div></div>
+      <div class="feature-card"><div class="feature-icon">🛡</div><div class="feature-title">Early warning dispatch</div><div class="feature-desc">Pre-staged SOPs dispatch to NDMA, PMD and municipal desks via SMS, email, in-app push, and radio.</div></div>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid var(--border);padding:22px 40px;color:var(--dim);font-size:12px;display:flex;justify-content:space-between">
+    <span>© 2026 HydroGuard AI · Government-grade disaster monitoring</span>
+    <span style="font-family:var(--mono)">SOC 2 · ISO 27001</span>
+  </div>
+</div>
+
+<!-- ═══════════════════ AUTH ═══════════════════ -->
+<div id="pg-auth" class="page">
+  <div class="auth-left">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="brand-mark">💧</div>
+      <div><div class="brand-name">HydroGuard <span>AI</span></div><div class="brand-sub">Secure operator portal</div></div>
+    </div>
+    <div>
+      <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:12px">Operations status</div>
+      <h2 style="font-size:36px;font-weight:600;letter-spacing:-.01em;line-height:1.1;max-width:500px">Three critical events are being tracked across Pakistan right now.</h2>
+      <div class="alert-cards">
+        <div class="alert-card"><div class="ac-city">ISLAMABAD</div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><div class="ac-val crit" style="color:var(--crit)">112.4<span style="font-size:10px;color:var(--muted)">mm/h</span></div><span class="status crit"><span class="dt"></span>CRIT</span></div></div>
+        <div class="alert-card"><div class="ac-city">LAHORE</div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><div class="ac-val" style="font-family:var(--mono);font-size:20px;color:var(--warn)">62.1<span style="font-size:10px;color:var(--muted)">mm/h</span></div><span class="status warn"><span class="dt"></span>HIGH</span></div></div>
+        <div class="alert-card"><div class="ac-city">PESHAWAR</div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><div class="ac-val" style="font-family:var(--mono);font-size:20px;color:var(--warn)">71.3<span style="font-size:10px;color:var(--muted)">mm/h</span></div><span class="status warn"><span class="dt"></span>HIGH</span></div></div>
+      </div>
+    </div>
+    <div class="auth-security">Authorized use only · All activity logged · SOC 2 Type II</div>
+  </div>
+
+  <div class="auth-right">
+    <h2>Sign in</h2>
+    <div class="auth-sub">Authenticate to access the operations portal.</div>
+
+    <div id="auth-error" class="hidden" style="background:var(--crit-s);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:10px 12px;font-size:12.5px;color:var(--crit);margin-bottom:14px"></div>
+
+    <label class="field-label">Email / Username</label>
+    <div class="field-wrap">
+      <span style="color:var(--dim)">✉</span>
+      <input id="auth-email" type="email" placeholder="admin@hydroguard.pk" autocomplete="username"/>
+    </div>
+
+    <label class="field-label">Password</label>
+    <div class="field-wrap">
+      <span style="color:var(--dim)">🔒</span>
+      <input id="auth-pass" type="password" placeholder="••••••••••••" autocomplete="current-password"/>
+      <span id="toggle-pw" style="color:var(--dim);cursor:pointer;font-size:12px" onclick="togglePw()">show</span>
+    </div>
+
+    <label class="field-label">Role</label>
+    <div class="role-row" id="role-row">
+      <button class="role-btn active" onclick="setRole(this,'admin')">Admin</button>
+      <button class="role-btn" onclick="setRole(this,'analyst')">Analyst</button>
+      <button class="role-btn" onclick="setRole(this,'viewer')">Viewer</button>
+    </div>
+
+    <button class="btn-primary" id="login-btn" onclick="doLogin()">
+      Authenticate →
+    </button>
+    <div class="auth-hint">End-to-end encrypted · Session expires in 8h</div>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:20px 0"/>
+    <div class="auth-footer">
+      <a>Forgot password?</a>
+      <a>Need access? Contact admin</a>
+    </div>
+    <div style="font-size:11px;color:var(--dim);margin-top:12px;text-align:center">
+      <strong>Demo:</strong> admin@hydroguard.pk / admin123
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ APP ═══════════════════ -->
+<div id="pg-app" class="page">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="brand-mark">💧</div>
+      <div>
+        <div class="brand-name">HydroGuard <span>AI</span></div>
+        <div class="brand-sub">Ops v4.1 · prod</div>
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Operations</div>
+      <div class="nav-item active" onclick="nav('dashboard',this)">📊 <span>Dashboard</span></div>
+      <div class="nav-item" onclick="nav('monitoring',this)">📡 <span>Monitoring</span></div>
+      <div class="nav-item" onclick="nav('cloudburst',this)">⛈ <span>Cloudburst</span><span class="badge" id="nb-cb">3</span></div>
+      <div class="nav-item" onclick="nav('analytics',this)">📈 <span>Analytics</span></div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-title">Management</div>
+      <div class="nav-item" onclick="nav('cities',this)">🏙 <span>Cities</span></div>
+      <div class="nav-item" onclick="nav('predict',this)">🔮 <span>Predict</span></div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-title">System</div>
+      <div class="nav-item" onclick="nav('settings',this)">⚙ <span>Settings</span></div>
+      <div class="nav-item" onclick="nav('profile',this)">👤 <span>Profile</span></div>
+    </div>
+
+    <div class="sb-footer">
+      <div class="avatar" id="sb-avatar">AK</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:500" id="sb-name">Admin</div>
+        <div style="font-family:var(--mono);font-size:9.5px;color:var(--dim)" id="sb-role">Admin · prod</div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()" title="Sign out">⏻</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="city-switcher" onclick="toggleCityMenu()">
+        🗺 <span id="cur-city">Islamabad</span>
+        <span style="color:var(--dim);font-size:11px">⌄</span>
+      </div>
+      <div id="city-menu" class="hidden" style="position:absolute;top:54px;left:220px;background:var(--panel);border:1px solid var(--border);border-radius:8px;z-index:100;padding:6px;min-width:180px">
+        <div id="city-menu-items"></div>
+      </div>
+
+      <div class="topbar-spacer"></div>
+
+      <div class="status-badge crit" id="tb-status">
+        <span class="live-dot"></span>
+        <span id="tb-status-text">3 CRITICAL · ISB</span>
+      </div>
+
+      <button class="icon-btn" onclick="appRefresh()">↻</button>
+      <button class="btn primary" style="font-size:12px" onclick="broadcastAdvisory()">📻 Broadcast advisory</button>
+    </div>
+
+    <!-- ── DASHBOARD ── -->
+    <div class="screen active" id="sc-dashboard">
+      <div class="page-head">
+        <div>
+          <div class="page-title">Live Operations · <span id="dh-city">Islamabad</span></div>
+          <div class="page-sub">Real-time hydrometeorological monitoring · <span style="font-family:var(--mono)">SESSION OPS-2026-04-19</span></div>
+        </div>
+        <div class="page-actions">
+          <button class="btn" onclick="appRefresh()">↻ Refresh</button>
+          <button class="btn" onclick="exportSnapshot()">⬇ Export</button>
+          <button class="btn danger" onclick="dispatchSOP()">📻 Dispatch SOP-04</button>
+        </div>
+      </div>
+
+      <!-- Crit banner -->
+      <div class="crit-banner" id="crit-banner">
+        <div class="crit-icon" style="font-size:18px">⚠</div>
+        <div>
+          <div class="crit-title">CLOUDBURST DETECTED · Islamabad sector F-8/F-9</div>
+          <div class="crit-sub">Anomaly score 94.2 · Rainfall 112.4 mm/h · Model confidence 97%</div>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn danger" onclick="dispatchSOP()">📻 Dispatch SOP-04</button>
+        <button class="btn" style="background:transparent;border-color:rgba(255,255,255,.2);color:white" onclick="document.getElementById('crit-banner').style.display='none'">Silence 5m</button>
+      </div>
+
+      <!-- Metrics -->
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mc-label">💧 Rainfall intensity</div><div class="mc-val crit" id="m-rain">—<span>mm/h</span></div><div class="mc-sub" id="m-rain-d">—</div></div>
+        <div class="metric-card"><div class="mc-label">🌡 Temperature</div><div class="mc-val cyan" id="m-temp">—<span>°C</span></div><div class="mc-sub" id="m-temp-d">—</div></div>
+        <div class="metric-card"><div class="mc-label">⏱ Pressure</div><div class="mc-val warn" id="m-press">—<span>hPa</span></div><div class="mc-sub" id="m-press-d">—</div></div>
+        <div class="metric-card"><div class="mc-label">💨 Wind speed</div><div class="mc-val hydro" id="m-wind">—<span>km/h</span></div><div class="mc-sub" id="m-wind-d">—</div></div>
+      </div>
+
+      <div class="dash-grid-3">
+        <!-- Left -->
+        <div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-label">Risk Level</div><div class="card-title">Current Assessment</div></div><div class="card-tag" id="risk-tag">LIVE</div></div>
+            <div style="font-family:var(--mono);font-size:36px;font-weight:700;color:var(--crit);line-height:1" id="risk-level-big">CRITICAL</div>
+            <div style="font-size:12px;color:var(--muted);margin:6px 0 12px" id="risk-sub">Evacuation protocols advised</div>
+            <div class="risk-meter">
+              <div class="risk-seg on-low"></div><div class="risk-seg on-med"></div>
+              <div class="risk-seg on-high"></div><div class="risk-seg on-crit"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:6px">
+              <span>Low <span style="color:var(--ok)">0–25</span></span>
+              <span>Guarded <span style="color:var(--warn)">25–50</span></span>
+              <span>Elevated <span style="color:var(--high)">50–75</span></span>
+              <span>Severe <span style="color:var(--crit)">75–100</span></span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div><div class="card-label">AI Prediction</div><div class="card-title">Autoencoder Model</div></div><div class="card-tag ok">ONLINE</div></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">Anomaly score</span>
+              <span style="font-family:var(--mono);font-size:18px;color:var(--crit)" id="ae-score">0.942</span>
+            </div>
+            <div class="score-bar-wrap"><div class="score-bar" id="ae-bar" style="width:94.2%;background:var(--crit)"></div></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">HRI Score</span>
+              <span style="font-family:var(--mono);font-size:18px" id="ae-hri">—</span>
+            </div>
+            <div class="score-bar-wrap"><div class="score-bar" id="hri-bar2" style="width:0%;background:var(--hydro)"></div></div>
+            <hr style="border:none;border-top:1px solid var(--border);margin:10px 0"/>
+            <div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between"><span>Cloudburst</span><span class="status crit" id="ae-cb">—</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Risk level</span><span class="status crit" id="ae-rl">—</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Score kind</span><span style="font-size:10px" id="ae-sk">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Centre: chart -->
+        <div>
+          <div class="card" style="height:100%">
+            <div class="card-head">
+              <div><div class="card-label">Rainfall · Anomaly stream</div><div class="card-title">Live data feed</div></div>
+              <div style="display:flex;gap:6px">
+                <span style="font-family:var(--mono);font-size:10px;color:var(--crit)">● LIVE</span>
+              </div>
+            </div>
+            <canvas id="main-chart" height="200"></canvas>
+            <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--muted)">
+              <span>— Rainfall mm/h</span>
+              <span>● Anomaly detected</span>
+              <span>-- Alert threshold</span>
+            </div>
+
+            <hr style="border:none;border-top:1px solid var(--border);margin:14px 0"/>
+            <div class="card-label" style="margin-bottom:10px">72-hour forecast</div>
+            <div id="forecast-strip"></div>
+          </div>
+        </div>
+
+        <!-- Right -->
+        <div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-label">Alerts feed</div><div class="card-title">Active events</div></div><div class="card-tag" id="alert-badge">3 NEW</div></div>
+            <div id="alerts-feed"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-label" style="margin-bottom:0">City risk overview</div></div>
+            <div id="city-risk-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MONITORING ── -->
+    <div class="screen" id="sc-monitoring">
+      <div class="page-head">
+        <div><div class="page-title">Real-Time Monitoring</div><div class="page-sub">Live sensor + API telemetry · 48 streams</div></div>
+        <div class="page-actions"><button class="btn">⏸ Pause</button><button class="btn primary">＋ Add source</button></div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mc-label">Active streams</div><div class="mc-val ok">47<span>/48</span></div><div class="mc-sub">1 degraded</div></div>
+        <div class="metric-card"><div class="mc-label">Messages / 60s</div><div class="mc-val cyan">14,482</div><div class="mc-sub">avg 241/s</div></div>
+        <div class="metric-card"><div class="mc-label">Ingest latency</div><div class="mc-val hydro">112<span>ms</span></div><div class="mc-sub">p95 · 210ms</div></div>
+        <div class="metric-card"><div class="mc-label">Backpressure</div><div class="mc-val ok">0.3<span>%</span></div><div class="mc-sub">queue depth 41</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><div class="card-label">Live terminal</div><div class="card-title">Packet stream</div></div><span class="card-tag ok" id="term-tick">t+0s</span></div>
+        <div id="terminal" style="background:var(--bg);border-radius:6px;padding:12px;font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--muted);max-height:300px;overflow-y:auto"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-label">Source health · all streams</div></div>
+        <div id="sensor-list"></div>
+      </div>
+    </div>
+
+    <!-- ── CLOUDBURST ── -->
+    <div class="screen" id="sc-cloudburst">
+      <div class="page-head">
+        <div><div class="page-title">Cloudburst Detection</div><div class="page-sub">Extreme-precipitation analytics and historical event registry</div></div>
+        <div class="page-actions">
+          <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+            <button class="btn" style="border:none;border-radius:0;background:var(--hydro-s);color:var(--hydro)">30d</button>
+            <button class="btn" style="border:none;border-radius:0">90d</button>
+            <button class="btn" style="border:none;border-radius:0">1yr</button>
+          </div>
+          <button class="btn">⬇ Export log</button>
+        </div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="mc-label">Events · YTD</div><div class="mc-val crit">23</div><div class="mc-sub">+4 vs 2024</div></div>
+        <div class="metric-card"><div class="mc-label">Avg peak intensity</div><div class="mc-val warn">114.6<span>mm/h</span></div><div class="mc-sub">threshold 90mm</div></div>
+        <div class="metric-card"><div class="mc-label">Detection latency</div><div class="mc-val cyan">38<span>sec</span></div><div class="mc-sub">p50 · p95 = 71s</div></div>
+        <div class="metric-card"><div class="mc-label">Model F1 score</div><div class="mc-val ok">0.924</div><div class="mc-sub">precision 0.91</div></div>
+      </div>
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-head"><div><div class="card-label">Rainfall intensity distribution</div><div class="card-title">Last 30 days · all sensors</div></div></div>
+          <canvas id="cb-chart" height="180"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><div class="card-label">Detection log</div><div class="card-title">AI stream · live</div></div></div>
+          <div id="detection-log" style="font-family:var(--mono);font-size:11.5px;display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><div class="card-label">Historical events</div><div class="card-title">Confirmed &amp; probable cloudbursts</div></div><button class="btn">Filter</button></div>
+        <table class="tbl" id="cb-table">
+          <thead><tr><th>Date</th><th>Location</th><th>Peak mm/h</th><th>Duration</th><th>Confidence</th><th>Class</th></tr></thead>
+          <tbody id="cb-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── ANALYTICS ── -->
+    <div class="screen" id="sc-analytics">
+      <div class="page-head">
+        <div><div class="page-title">Analytics &amp; Reports</div><div class="page-sub">Database statistics and model performance</div></div>
+        <div class="page-actions"><button class="btn">⬇ Export report</button></div>
+      </div>
+      <div class="metrics-grid" id="analytics-metrics"></div>
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-head"><div><div class="card-label">Anomalies by risk level</div><div class="card-title">Distribution</div></div></div>
+          <canvas id="analytics-chart" height="220"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><div class="card-label">Top cities</div><div class="card-title">By anomaly frequency</div></div></div>
+          <div id="analytics-cities"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><div class="card-label">Recent anomaly records</div></div></div>
+        <table class="tbl">
+          <thead><tr><th>City</th><th>Date</th><th>HRI</th><th>Risk</th><th>Score</th><th>Cloudburst</th></tr></thead>
+          <tbody id="analytics-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── CITIES ── -->
+    <div class="screen" id="sc-cities">
+      <div class="page-head">
+        <div><div class="page-title">City Management</div><div class="page-sub">Monitored regions and risk thresholds</div></div>
+        <div class="page-actions"><button class="btn primary">＋ Add city</button></div>
+      </div>
+      <div id="city-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px"></div>
+    </div>
+
+    <!-- ── PREDICT ── -->
+    <div class="screen" id="sc-predict">
+      <div class="page-head">
+        <div><div class="page-title">Quick Predict</div><div class="page-sub">Run the anomaly model on custom weather input</div></div>
+      </div>
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-head"><div><div class="card-label">Input parameters</div><div class="card-title">Weather observation</div></div></div>
+          <div class="form-grid">
+            <div class="form-field"><label>City</label><input id="p-city" value="Islamabad"/></div>
+            <div class="form-field"><label>Date</label><input id="p-date" type="date"/></div>
+            <div class="form-field"><label>Precipitation (mm)</label><input id="p-prcp" type="number" value="0" min="0"/></div>
+            <div class="form-field"><label>Humidity (%)</label><input id="p-humidity" type="number" value="65" min="0" max="100"/></div>
+            <div class="form-field"><label>Pressure (hPa)</label><input id="p-pressure" type="number" value="1013"/></div>
+            <div class="form-field"><label>Cloud cover (%)</label><input id="p-cloud" type="number" value="40" min="0" max="100"/></div>
+            <div class="form-field"><label>Wind speed (km/h)</label><input id="p-wind" type="number" value="15" min="0"/></div>
+            <div class="form-field"><label>Temperature (°C)</label><input id="p-temp" type="number" value="28"/></div>
+          </div>
+          <button class="btn primary" onclick="runPredict()" style="width:100%;justify-content:center">🔮 Run prediction <span id="predict-spin" class="spin hidden"></span></button>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><div class="card-label">Result</div><div class="card-title">Model output</div></div></div>
+          <div id="hri-gauge-wrap" class="hidden" style="margin-bottom:14px">
+            <div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-family:var(--mono)">HYDROGUARD RISK INDEX</div>
+            <div class="hri-wrap">
+              <div class="hri-bar-bg"><div class="hri-bar-fill" id="hri-fill"></div></div>
+              <div class="hri-label-text" id="hri-label-val"></div>
+            </div>
+          </div>
+          <div class="result-box" id="predict-result">Configure parameters and click "Run prediction".</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS ── -->
+    <div class="screen" id="sc-settings">
+      <div class="page-head"><div><div class="page-title">Settings</div><div class="page-sub">System configuration and API connection</div></div></div>
+      <div style="max-width:600px">
+        <div class="settings-section">
+          <h3>API Connection</h3>
+          <div class="card">
+            <div class="form-field" style="margin-bottom:12px"><label>Backend URL</label><input id="s-api-url" placeholder="http://127.0.0.1:8000"/></div>
+            <div class="form-field" style="margin-bottom:12px"><label>Admin token</label><input id="s-admin-token" type="password" placeholder="Your admin token"/></div>
+            <div style="display:flex;gap:8px">
+              <button class="btn primary" onclick="saveSettings()">Save</button>
+              <button class="btn" onclick="testConnection()">Test connection <span id="conn-spin" class="spin hidden"></span></button>
+            </div>
+            <div id="conn-result" style="margin-top:10px;font-size:12px"></div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Alert thresholds</h3>
+          <div class="setting-row">
+            <div><div class="setting-label">Enable critical alerts</div><div class="setting-sub">Show critical banner when anomaly detected</div></div>
+            <button class="toggle on" id="t-alerts" onclick="this.classList.toggle('on');this.classList.toggle('off')"></button>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Auto-refresh dashboard</div><div class="setting-sub">Refresh every 60 seconds</div></div>
+            <button class="toggle on" id="t-auto" onclick="this.classList.toggle('on');this.classList.toggle('off')"></button>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Monsoon sensitivity boost</div><div class="setting-sub">20% higher sensitivity Jun–Sep</div></div>
+            <button class="toggle on" id="t-monsoon" onclick="this.classList.toggle('on');this.classList.toggle('off')"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PROFILE ── -->
+    <div class="screen" id="sc-profile">
+      <div class="page-head"><div><div class="page-title">Profile</div><div class="page-sub">Your account and session information</div></div></div>
+      <div style="max-width:500px">
+        <div class="card" style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+          <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--hydro),var(--cyan));display:grid;place-items:center;font-size:18px;font-weight:700;color:white" id="profile-avatar">A</div>
+          <div>
+            <div style="font-size:16px;font-weight:600" id="profile-name">Admin</div>
+            <div style="font-size:12px;color:var(--muted)" id="profile-email">admin@hydroguard.pk</div>
+            <div style="margin-top:4px"><span class="status ok" id="profile-role">ADMIN</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="font-family:var(--mono);font-size:11.5px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--dim)">Session ID</span><span id="profile-session">—</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--dim)">Login time</span><span id="profile-login">—</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--dim)">Expires</span><span id="profile-expiry">—</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--dim)">IP</span><span>127.0.0.1</span></div>
+          </div>
+        </div>
+        <button class="btn danger" style="width:100%;justify-content:center;margin-top:8px" onclick="doLogout()">Sign out →</button>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /pg-app -->
+
+<script>
+// ═══════════════════ STATE ═══════════════════
+let API_URL   = localStorage.getItem('hg_api_url') || 'http://127.0.0.1:8000';
+let ADMIN_TOK = localStorage.getItem('hg_admin_token') || '';
+let session   = null;
+let mainChart = null, cbChart = null, analyticsChart = null;
+const CITIES  = ['Islamabad','Lahore','Karachi','Peshawar','Quetta','Gilgit','Rawalpindi','Faisalabad'];
+
+// ═══════════════════ ROUTING ═══════════════════
+function show(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function nav(screen, el) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('sc-' + screen).classList.add('active');
+  if (screen === 'analytics') loadAnalytics();
+  if (screen === 'monitoring') startTerminal();
+}
+
+// ═══════════════════ AUTH ═══════════════════
+const DEMO_CREDS = { 'admin@hydroguard.pk': { pass:'admin123', role:'Admin', name:'Admin User' } };
+
+function setRole(btn, r) {
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  btn.dataset.role = r;
+}
+
+function togglePw() {
+  const inp = document.getElementById('auth-pass');
+  const isText = inp.type === 'text';
+  inp.type = isText ? 'password' : 'text';
+  document.getElementById('toggle-pw').textContent = isText ? 'show' : 'hide';
+}
+
+function doLogin() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-pass').value;
+  const role  = document.querySelector('.role-btn.active')?.textContent || 'Admin';
+  const errEl = document.getElementById('auth-error');
+  errEl.classList.add('hidden');
+
+  const user = DEMO_CREDS[email];
+  if (!user || user.pass !== pass) {
+    errEl.textContent = 'Invalid credentials. Check email and password.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  // Build session token (simulated JWT payload stored in cookie)
+  const expires = new Date(Date.now() + 8 * 3600 * 1000);
+  session = {
+    email, role: user.role, name: user.name,
+    token: btoa(JSON.stringify({ email, role: user.role, exp: expires.getTime() })),
+    loginTime: new Date().toISOString(),
+    expiresAt: expires.toISOString(),
+    sessionId: 'OPS-' + Math.random().toString(36).slice(2,10).toUpperCase(),
+  };
+
+  // Set secure httpOnly-like cookie (JS-readable for demo; in prod use httpOnly server cookie)
+  document.cookie = `hg_session=${session.token};expires=${expires.toUTCString()};path=/;SameSite=Strict`;
+  localStorage.setItem('hg_session_meta', JSON.stringify(session));
+
+  // Update UI
+  document.getElementById('sb-name').textContent = user.name;
+  document.getElementById('sb-role').textContent = user.role + ' · prod';
+  document.getElementById('sb-avatar').textContent = user.name.slice(0,2).toUpperCase();
+  document.getElementById('profile-name').textContent = user.name;
+  document.getElementById('profile-email').textContent = email;
+  document.getElementById('profile-role').textContent = user.role.toUpperCase();
+  document.getElementById('profile-avatar').textContent = user.name[0].toUpperCase();
+  document.getElementById('profile-session').textContent = session.sessionId;
+  document.getElementById('profile-login').textContent = new Date(session.loginTime).toLocaleString();
+  document.getElementById('profile-expiry').textContent = new Date(session.expiresAt).toLocaleString();
+  document.getElementById('s-api-url').value = API_URL;
+  document.getElementById('s-admin-token').value = ADMIN_TOK;
+
+  show('pg-app');
+  initDashboard();
+}
+
+function doLogout() {
+  session = null;
+  document.cookie = 'hg_session=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;';
+  localStorage.removeItem('hg_session_meta');
+  show('pg-landing');
+}
+
+// Check existing session on load
+window.addEventListener('DOMContentLoaded', () => {
+  const meta = localStorage.getItem('hg_session_meta');
+  if (meta) {
+    try {
+      const s = JSON.parse(meta);
+      if (new Date(s.expiresAt) > new Date()) {
+        session = s;
+        document.getElementById('sb-name').textContent = s.name;
+        document.getElementById('sb-role').textContent = s.role + ' · prod';
+        document.getElementById('sb-avatar').textContent = s.name.slice(0,2).toUpperCase();
+        document.getElementById('s-api-url').value = API_URL;
+        document.getElementById('s-admin-token').value = ADMIN_TOK;
+        show('pg-app');
+        initDashboard();
+        return;
+      }
+    } catch (_) {}
+    localStorage.removeItem('hg_session_meta');
+  }
+  initHeroChart();
+});
+
+// ═══════════════════ API helpers ═══════════════════
+function api(path) { return API_URL + path; }
+
+async function fetchJSON(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (ADMIN_TOK) headers['X-Admin-Token'] = ADMIN_TOK;
+  const res = await fetch(api(path), { ...opts, headers });
+  if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+  return res.json();
+}
+
+// ═══════════════════ CITY MENU ═══════════════════
+let cityMenuOpen = false;
+function toggleCityMenu() {
+  cityMenuOpen = !cityMenuOpen;
+  document.getElementById('city-menu').classList.toggle('hidden', !cityMenuOpen);
+  if (cityMenuOpen) {
+    const el = document.getElementById('city-menu-items');
+    el.innerHTML = CITIES.map(c => `<div onclick="selectCity('${c}')" style="padding:8px 12px;cursor:pointer;font-size:13px;border-radius:4px" onmouseover="this.style.background='var(--panel2)'" onmouseout="this.style.background=''">${c}</div>`).join('');
+  }
+}
+function selectCity(c) {
+  document.getElementById('cur-city').textContent = c;
+  document.getElementById('dh-city').textContent = c;
+  cityMenuOpen = false;
+  document.getElementById('city-menu').classList.add('hidden');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.city-switcher') && !e.target.closest('#city-menu')) {
+    cityMenuOpen = false;
+    document.getElementById('city-menu')?.classList.add('hidden');
+  }
+});
+
+// ═══════════════════ DASHBOARD INIT ═══════════════════
+function initDashboard() {
+  buildMainChart();
+  buildForecastStrip();
+  buildAlertsFeed();
+  buildCityRiskList();
+  buildCBChart();
+  buildDetectionLog();
+  buildCBTable();
+  buildCityCards();
+  initSensorList();
+  initTerminal();
+  loadAnalytics();
+  fetchLatestPrediction();
+  document.getElementById('p-date').value = new Date().toISOString().split('T')[0];
+}
+
+// ═══════════════════ CHARTS ═══════════════════
+function buildMainChart() {
+  const ctx = document.getElementById('main-chart').getContext('2d');
+  if (mainChart) mainChart.destroy();
+  const labels = Array.from({length:48}, (_,i) => {
+    const t = new Date(Date.now() - (47-i)*15*60*1000);
+    return `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+  });
+  const data = labels.map((_,i) => {
+    let v = 20 + Math.sin(i*0.4)*12 + Math.random()*8;
+    if (i > 40) v += (i-40)*8;
+    if (i > 44) v = 80 + Math.random()*35;
+    return v;
+  });
+  mainChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[{
+        label:'Rainfall mm/h',data,
+        borderColor:'rgb(56,189,248)',borderWidth:1.4,
+        backgroundColor:(ctx2)=>{
+          const g=ctx2.chart.ctx.createLinearGradient(0,0,0,200);
+          g.addColorStop(0,'rgba(56,189,248,0.2)');g.addColorStop(1,'rgba(56,189,248,0)');return g;
+        },
+        fill:true,tension:0.3,pointRadius:0,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#4f6481',font:{size:10},maxTicksLimit:8}},
+        y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#4f6481',font:{size:10}}},
+      }
+    }
+  });
+}
+
+function initHeroChart() {
+  const ctx = document.getElementById('hero-chart')?.getContext('2d');
+  if (!ctx) return;
+  const data = Array.from({length:36}, (_,i) => {
+    let v = 20 + Math.sin(i*0.4)*12 + Math.random()*8;
+    if (i > 30) v = 80 + (i-30)*10 + Math.random()*15;
+    return v;
+  });
+  new Chart(ctx, {
+    type:'line',data:{labels:data.map((_,i)=>i),datasets:[{data,borderColor:'rgb(239,68,68)',borderWidth:1.5,fill:false,tension:0.3,pointRadius:0}]},
+    options:{responsive:true,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}
+  });
+}
+
+function buildCBChart() {
+  const ctx = document.getElementById('cb-chart')?.getContext('2d');
+  if (!ctx) return;
+  if (cbChart) cbChart.destroy();
+  const bins=['<30','30-50','50-70','70-90','90-110','110+'];
+  const vals=[142,89,54,21,8,4];
+  const colors=['#34d399','#34d399','#fbbf24','#fbbf24','#ef4444','#ef4444'];
+  cbChart = new Chart(ctx,{
+    type:'bar',
+    data:{labels:bins,datasets:[{data:vals,backgroundColor:colors.map(c=>c+'33'),borderColor:colors,borderWidth:1.5,borderRadius:4}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#4f6481',font:{size:11}}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#4f6481',font:{size:11}}}}}
+  });
+}
+
+// ═══════════════════ FORECAST ═══════════════════
+function buildForecastStrip() {
+  const slots = [
+    {d:'Now',r:112,c:'var(--crit)'},{d:'+6h',r:78,c:'var(--high)'},
+    {d:'+12h',r:46,c:'var(--warn)'},{d:'+24h',r:22,c:'var(--ok)'},
+    {d:'+36h',r:34,c:'var(--warn)'},{d:'+48h',r:58,c:'var(--high)'},
+    {d:'+72h',r:18,c:'var(--ok)'},
+  ];
+  document.getElementById('forecast-strip').innerHTML = slots.map(s=>`
+    <div class="fc-row">
+      <span style="width:46px;color:${s.c};font-weight:500">${s.d}</span>
+      <div class="fc-bar-wrap"><div class="fc-bar" style="width:${(s.r/130*100).toFixed(0)}%;background:${s.c}"></div></div>
+      <span style="width:50px;text-align:right;color:var(--text)">${s.r}mm</span>
+    </div>`).join('');
+}
+
+// ═══════════════════ ALERTS FEED ═══════════════════
+function buildAlertsFeed() {
+  const alerts=[
+    {k:'crit',t:'Cloudburst · Islamabad F-8/F-9',m:'112.4 mm/h · conf 97%',ts:'NOW'},
+    {k:'warn',t:'Drainage saturation · G-13',m:'Capacity 88% · discharge falling',ts:'14m'},
+    {k:'warn',t:'Pressure drop · Murree ridge',m:'Δ −7.2 hPa/hr · convective likely',ts:'32m'},
+    {k:'info',t:'Model retrained · v4.1.2',m:'F1 +0.024 · deployed to prod',ts:'1h'},
+    {k:'info',t:'Sensor PK-ISB-024 reconnected',m:'Korang Bridge · 12h outage resolved',ts:'3h'},
+  ];
+  document.getElementById('alerts-feed').innerHTML = alerts.map(a=>`
+    <div class="alert-row">
+      <div class="alert-stripe ${a.k}"></div>
+      <div><div class="alert-title">${a.t}</div><div class="alert-meta">${a.m}</div></div>
+      <div class="alert-time">${a.ts}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════ CITY RISK LIST ═══════════════════
+const CITY_DATA = [
+  {name:'Islamabad',hri:94,c:'var(--crit)'},{name:'Lahore',hri:72,c:'var(--high)'},
+  {name:'Peshawar',hri:68,c:'var(--warn)'},{name:'Rawalpindi',hri:61,c:'var(--warn)'},
+  {name:'Karachi',hri:32,c:'var(--ok)'},{name:'Quetta',hri:18,c:'var(--ok)'},
+];
+function buildCityRiskList() {
+  document.getElementById('city-risk-list').innerHTML = CITY_DATA.map(c=>`
+    <div class="city-row">
+      <div class="city-name">${c.name}</div>
+      <div class="city-bar-wrap"><div class="city-bar" style="width:${c.hri}%;background:${c.c}"></div></div>
+      <div class="city-hri" style="color:${c.c}">${c.hri}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════ CLOUDBURST TABLE ═══════════════════
+function buildCBTable() {
+  const events=[
+    {d:'2025-07-28',l:'Islamabad E-11',p:134.2,dur:'42m',conf:96,cls:'Confirmed'},
+    {d:'2025-08-03',l:'Murree ridge',p:118.7,dur:'38m',conf:94,cls:'Confirmed'},
+    {d:'2025-08-17',l:'Rawalpindi cantt',p:102.1,dur:'55m',conf:89,cls:'Confirmed'},
+    {d:'2025-09-02',l:'Chakwal plains',p:91.4,dur:'28m',conf:78,cls:'Probable'},
+    {d:'2024-07-23',l:'Islamabad F-8',p:156.8,dur:'1h 12m',conf:99,cls:'Confirmed'},
+  ];
+  document.getElementById('cb-tbody').innerHTML = events.map(e=>`
+    <tr>
+      <td class="strong" style="font-family:var(--mono)">${e.d}</td>
+      <td class="strong">${e.l}</td>
+      <td style="font-family:var(--mono);color:${e.p>120?'var(--crit)':'var(--warn)'}">${e.p}</td>
+      <td style="font-family:var(--mono)">${e.dur}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;height:4px;background:var(--panel3);border-radius:2px;overflow:hidden">
+            <div style="width:${e.conf}%;height:100%;background:var(--cyan);border-radius:2px"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:11px">${e.conf}%</span>
+        </div>
+      </td>
+      <td><span class="status ${e.cls==='Confirmed'?'crit':'warn'}">${e.cls}</span></td>
+    </tr>`).join('');
+}
+
+// ═══════════════════ DETECTION LOG ═══════════════════
+function buildDetectionLog() {
+  const logs=[
+    {t:'09:41:22',lvl:'CRIT',msg:'Cloudburst confirmed · F-8 · 112.4 mm/h · conf 97%'},
+    {t:'09:40:58',lvl:'WARN',msg:'Anomaly score crossed 0.85 threshold'},
+    {t:'09:40:32',lvl:'INFO',msg:'Window 15m recomputed · rainfall σ=18.4'},
+    {t:'09:39:11',lvl:'WARN',msg:'Latent vector drift detected on PK-ISB-013'},
+    {t:'09:37:04',lvl:'INFO',msg:'Sensor fusion · 47/48 online'},
+    {t:'09:32:18',lvl:'WARN',msg:'Pressure drop −3.4 hPa · convective likely'},
+  ];
+  document.getElementById('detection-log').innerHTML = logs.map(l=>{
+    const c=l.lvl==='CRIT'?'var(--crit)':l.lvl==='WARN'?'var(--warn)':'var(--hydro)';
+    const bg=l.lvl==='CRIT'?'var(--crit-s)':l.lvl==='WARN'?'rgba(251,191,36,.12)':'var(--hydro-s)';
+    return `<div style="display:flex;gap:10px">
+      <span style="color:var(--dim);font-size:10px;width:60px">${l.t}</span>
+      <span style="font-size:10px;width:40px;padding:1px 4px;border-radius:3px;background:${bg};color:${c};text-align:center">${l.lvl}</span>
+      <span style="color:var(--muted);flex:1">${l.msg}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════ CITY CARDS ═══════════════════
+function buildCityCards() {
+  const cards = CITY_DATA.map(c=>`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="font-size:15px;font-weight:600">${c.name}</div>
+        <span class="status ${c.hri>75?'crit':c.hri>50?'warn':'ok'}">${c.hri>75?'CRITICAL':c.hri>50?'HIGH':'NORMAL'}</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:${c.c};margin:10px 0;line-height:1">${c.hri}<span style="font-size:13px;color:var(--muted)"> HRI</span></div>
+      <div style="height:5px;background:var(--panel3);border-radius:3px;overflow:hidden">
+        <div style="width:${c.hri}%;height:100%;background:${c.c};border-radius:3px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--dim)">
+        <span>0 Low</span><span>100 Severe</span>
+      </div>
+    </div>`);
+  document.getElementById('city-cards').innerHTML = cards.join('');
+}
+
+// ═══════════════════ SENSOR LIST ═══════════════════
+const SENSORS=[
+  {id:'PK-ISB-007',name:'Rawal Dam · inflow gauge',v:'98.1',u:'mm',s:'ok'},
+  {id:'PK-ISB-011',name:'Margalla N · ridge sensor',v:'112.4',u:'mm',s:'warn'},
+  {id:'PK-ISB-013',name:'Nilan Pass · convective',v:'134.8',u:'mm',s:'crit'},
+  {id:'PK-ISB-019',name:'Simly Dam · spillway',v:'76.2',u:'m³/s',s:'ok'},
+  {id:'PK-ISB-024',name:'Korang · bridge level',v:'2.14',u:'m',s:'ok'},
+  {id:'PK-ISB-031',name:'F-8 urban drain',v:'41.6',u:'m³/s',s:'warn'},
+  {id:'PK-LHR-004',name:'Lahore · Ravi bund',v:'4.22',u:'m',s:'ok'},
+  {id:'PK-KHI-002',name:'Karachi · Malir river',v:'0.87',u:'m',s:'ok'},
+];
+function initSensorList() {
+  document.getElementById('sensor-list').innerHTML = SENSORS.map(s=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:6px;background:var(--bg1);margin-bottom:6px">
+      <div>
+        <div style="font-size:13px;font-weight:500">${s.name}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:2px">${s.id}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:var(--mono);font-size:13px">${s.v}<span style="color:var(--muted);font-size:10px">${s.u}</span></span>
+        <span class="status ${s.s}">${s.s==='ok'?'NOM':s.s==='warn'?'WARN':'CRIT'}</span>
+      </div>
+    </div>`).join('');
+}
+
+// ═══════════════════ TERMINAL ═══════════════════
+const TERM_LINES=[
+  {t:'crit',m:'[PK-ISB-013] rainfall=134.8mm anomaly=0.94 CRIT'},
+  {t:'warn',m:'[PK-ISB-011] rainfall=112.4mm anomaly=0.81 WARN'},
+  {t:'info',m:'[PK-ISB-007] rainfall=98.1mm anomaly=0.68'},
+  {t:'info',m:'[AE-v4.1.2] inference batch=32 ms=0.8 → 3 anomalies'},
+  {t:'info',m:'[FUSION] commit hash=0x4af2 sources=47/48'},
+  {t:'crit',m:'[ALERT] DISPATCH SOP-04 · sector F-8/F-9'},
+  {t:'info',m:'[PMD-gateway] rtt=44ms heartbeat ok'},
+  {t:'warn',m:'[PK-ISB-031] flow=41.6 m³/s → anomaly=0.73 WARN'},
+];
+let termTick=0,termInterval=null;
+function initTerminal() {}
+function startTerminal() {
+  if (termInterval) return;
+  const el=document.getElementById('terminal');
+  termInterval=setInterval(()=>{
+    termTick++;
+    document.getElementById('term-tick').textContent=`t+${termTick}s`;
+    const l=TERM_LINES[termTick%TERM_LINES.length];
+    const c=l.t==='crit'?'var(--crit)':l.t==='warn'?'var(--warn)':'var(--muted)';
+    const ts=new Date().toISOString().slice(11,23);
+    const div=document.createElement('div');
+    div.style.color=c;div.textContent=`[${ts}] `+l.m;
+    el.appendChild(div);el.scrollTop=el.scrollHeight;
+    if(el.children.length>80)el.removeChild(el.firstChild);
+  },1400);
+}
+
+// ═══════════════════ ANALYTICS ═══════════════════
+async function loadAnalytics() {
+  try {
+    const [dbStats, analytics] = await Promise.allSettled([
+      fetchJSON('/database/statistics'),
+      fetchJSON('/analytics'),
+    ]);
+    const db = dbStats.status==='fulfilled' ? dbStats.value : {};
+    const an = analytics.status==='fulfilled' ? analytics.value : {};
+    const total    = db.total_records ?? 0;
+    const anomalies= db.total_anomalies ?? 0;
+    const cloudburst=db.cloudburst_alerts ?? 0;
+    const weekly   = an.total_anomalies_this_week ?? 0;
+    document.getElementById('analytics-metrics').innerHTML=`
+      <div class="metric-card"><div class="mc-label">Total records</div><div class="mc-val hydro">${total.toLocaleString()}</div><div class="mc-sub">in database</div></div>
+      <div class="metric-card"><div class="mc-label">Total anomalies</div><div class="mc-val crit">${anomalies.toLocaleString()}</div><div class="mc-sub">${total?((anomalies/total*100).toFixed(1)):0}% rate</div></div>
+      <div class="metric-card"><div class="mc-label">Cloudburst alerts</div><div class="mc-val warn">${cloudburst.toLocaleString()}</div><div class="mc-sub">severe events</div></div>
+      <div class="metric-card"><div class="mc-label">This week</div><div class="mc-val cyan">${weekly}</div><div class="mc-sub">new anomalies</div></div>`;
+    const byRisk = an.alerts_by_risk_level || {LOW:0,MEDIUM:0,HIGH:0,CRITICAL:0};
+    const ctxA=document.getElementById('analytics-chart')?.getContext('2d');
+    if(ctxA){
+      if(analyticsChart) analyticsChart.destroy();
+      analyticsChart=new Chart(ctxA,{
+        type:'doughnut',
+        data:{labels:['LOW','MEDIUM','HIGH','CRITICAL'],
+          datasets:[{data:[byRisk.LOW||0,byRisk.MEDIUM||0,byRisk.HIGH||0,byRisk.CRITICAL||0],
+            backgroundColor:['rgba(52,211,153,.7)','rgba(251,191,36,.7)','rgba(249,115,22,.7)','rgba(239,68,68,.7)'],
+            borderColor:['#34d399','#fbbf24','#f97316','#ef4444'],borderWidth:1}]},
+        options:{cutout:'65%',plugins:{legend:{position:'right',labels:{color:'#8da3be',font:{size:12}}}}}
+      });
+    }
+    const topCities = an.top_cities_by_frequency || [];
+    const maxC = topCities[0]?.count || 1;
+    document.getElementById('analytics-cities').innerHTML = topCities.map(c=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="min-width:90px;font-size:13px">${c.city}</span>
+        <div style="flex:1;height:5px;background:var(--panel3);border-radius:3px;overflow:hidden">
+          <div style="width:${(c.count/maxC*100).toFixed(0)}%;height:100%;background:var(--hydro);border-radius:3px"></div>
+        </div>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--muted);min-width:30px;text-align:right">${c.count}</span>
+      </div>`).join('') || '<div style="color:var(--dim);font-size:12px;padding:10px 0">No data yet</div>';
+    await loadRecentAnomalies();
+  } catch(e) {
+    console.warn('Analytics load failed:', e.message);
+  }
+}
+
+async function loadRecentAnomalies() {
+  try {
+    const data = await fetchJSON('/anomalies?limit=20&anomalies_only=true');
+    const tbody = document.getElementById('analytics-table');
+    tbody.innerHTML = (data.anomalies||[]).map(r=>`
+      <tr>
+        <td class="strong">${r.city}</td>
+        <td style="font-family:var(--mono)">${r.date?r.date.slice(0,10):''}</td>
+        <td style="font-family:var(--mono);font-weight:700">${r.hri_score ?? '—'}</td>
+        <td><span class="status ${r.risk_level==='CRITICAL'?'crit':r.risk_level==='HIGH'||r.risk_level==='MEDIUM'?'warn':'ok'}">${r.risk_level}</span></td>
+        <td style="font-family:var(--mono)">${r.anomaly_score?.toFixed(4)??'—'}</td>
+        <td>${r.cloudburst_risk?.is_likely?'<span class="status crit">Yes</span>':'<span style="color:var(--dim)">No</span>'}</td>
+      </tr>`).join('') || '<tr><td colspan="6" style="color:var(--dim);text-align:center;padding:16px">No anomaly records yet</td></tr>';
+  } catch(_) {}
+}
+
+// ═══════════════════ PREDICT ═══════════════════
+async function runPredict() {
+  const spin=document.getElementById('predict-spin');
+  const res =document.getElementById('predict-result');
+  const hriW=document.getElementById('hri-gauge-wrap');
+  spin.classList.remove('hidden');
+  res.textContent='Running…';
+  hriW.classList.add('hidden');
+  const payload={
+    city:       document.getElementById('p-city').value,
+    date:       document.getElementById('p-date').value,
+    prcp:       +document.getElementById('p-prcp').value,
+    humidity:   +document.getElementById('p-humidity').value,
+    pressure:   +document.getElementById('p-pressure').value,
+    cloud_cover:+document.getElementById('p-cloud').value,
+    wspd:       +document.getElementById('p-wind').value,
+    tavg:       +document.getElementById('p-temp').value,
+  };
+  try {
+    const data=await fetchJSON('/predict',{method:'POST',body:JSON.stringify(payload)});
+    if(data.hri_score!=null){
+      const c=hriColor(data.hri_label);
+      document.getElementById('hri-fill').style.cssText=`width:${data.hri_score}%;background:${c}`;
+      document.getElementById('hri-label-val').style.color=c;
+      document.getElementById('hri-label-val').textContent=`${data.hri_score}/100 · ${data.hri_label}`;
+      hriW.classList.remove('hidden');
+    }
+    res.textContent=JSON.stringify({
+      city:        data.city,
+      date:        data.date,
+      is_anomaly:  data.is_anomaly,
+      risk_level:  data.risk_level,
+      hri_score:   data.hri_score,
+      hri_label:   data.hri_label,
+      anomaly_score:data.anomaly_score,
+      threshold:   data.threshold,
+      cloudburst:  data.cloudburst_risk?.risk_category,
+      remarks:     data.remarks,
+    },null,2);
+    updateDashboardFromResult(data);
+  } catch(e){
+    res.textContent='Error: '+e.message;
+  } finally { spin.classList.add('hidden'); }
+}
+
+async function fetchLatestPrediction() {
+  try {
+    const recs = await fetchJSON('/anomalies?limit=1&anomalies_only=false');
+    if(recs.anomalies?.length) updateDashboardFromRecord(recs.anomalies[0]);
+  } catch(_) {}
+}
+
+function updateDashboardFromResult(data) {
+  const cb=data.cloudburst_risk||{};
+  document.getElementById('ae-score').textContent=data.anomaly_score?.toFixed(4)??'—';
+  document.getElementById('ae-bar').style.width=Math.min((data.anomaly_score/data.threshold)*50,100)+'%';
+  if(data.hri_score!=null){
+    const c=hriColor(data.hri_label);
+    document.getElementById('ae-hri').textContent=data.hri_score+'/100';
+    document.getElementById('ae-hri').style.color=c;
+    document.getElementById('hri-bar2').style.cssText=`width:${data.hri_score}%;background:${c}`;
+  }
+  const rl=data.risk_level||'LOW';
+  document.getElementById('ae-cb').textContent=cb.is_cloudburst_likely?'YES':'NO';
+  document.getElementById('ae-rl').textContent=rl;
+  document.getElementById('ae-sk').textContent=data.score_kind||'—';
+  document.getElementById('risk-level-big').textContent=rl;
+  document.getElementById('risk-level-big').style.color=riskColor(rl);
+  document.getElementById('risk-sub').textContent=data.remarks||'';
+  const m=data.is_anomaly?{rain:'⚠ '+((data.anomaly_score||0)*100).toFixed(0),rains:'anomaly active'}:{rain:'—',rains:'normal'};
+  document.getElementById('m-rain-d').textContent=m.rains;
+}
+
+function updateDashboardFromRecord(r) {
+  if(r.anomaly_score) updateDashboardFromResult({
+    anomaly_score:r.anomaly_score, threshold:r.threshold,
+    is_anomaly:r.is_anomaly, risk_level:r.risk_level,
+    hri_score:r.hri_score, hri_label:r.hri_label,
+    cloudburst_risk:{is_cloudburst_likely:r.cloudburst_risk?.is_likely},
+    remarks:r.remarks,score_kind:'autoencoder_reconstruction_error'
+  });
+}
+
+// ═══════════════════ SETTINGS ═══════════════════
+function saveSettings() {
+  API_URL   = document.getElementById('s-api-url').value.trim();
+  ADMIN_TOK = document.getElementById('s-admin-token').value.trim();
+  localStorage.setItem('hg_api_url',   API_URL);
+  localStorage.setItem('hg_admin_token',ADMIN_TOK);
+  document.getElementById('conn-result').innerHTML='<span style="color:var(--ok)">✓ Settings saved</span>';
+}
+
+async function testConnection() {
+  const spin=document.getElementById('conn-spin');
+  const res =document.getElementById('conn-result');
+  spin.classList.remove('hidden');
+  res.textContent='';
+  try {
+    const data=await fetchJSON('/health');
+    res.innerHTML=`<span style="color:var(--ok)">✓ Connected · Model ${data.model_loaded?'loaded':'not trained'} · v${data.version}</span>`;
+  } catch(e) {
+    res.innerHTML=`<span style="color:var(--crit)">✗ Cannot reach ${API_URL} — ${e.message}</span>`;
+  } finally { spin.classList.add('hidden'); }
+}
+
+// ═══════════════════ ACTIONS ═══════════════════
+function appRefresh() { fetchLatestPrediction(); loadAnalytics(); }
+function broadcastAdvisory() { alert('Advisory broadcast queued for NDMA, PMD, and municipal desks.'); }
+function dispatchSOP()       { alert('SOP-04 dispatched to NDMA Islamabad sector F-8/F-9.'); }
+function exportSnapshot()    { alert('Export initiated. Check downloads in 30s.'); }
+
+// ═══════════════════ HELPERS ═══════════════════
+function hriColor(label) {
+  return {Low:'#34d399',Guarded:'#fbbf24',Elevated:'#f97316',Severe:'#ef4444'}[label]||'#5b8cf7';
+}
+function riskColor(rl) {
+  return {LOW:'#34d399',MEDIUM:'#fbbf24',HIGH:'#f97316',CRITICAL:'#ef4444'}[rl]||'#34d399';
+}
+</script>
+</body>
+</html>

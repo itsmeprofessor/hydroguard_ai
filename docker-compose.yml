@@ -1,0 +1,89 @@
+# ============================================================
+#  HydroGuard-AI — Docker Compose
+#  Dev: docker compose up
+#  Prod with Postgres: uncomment the postgres service + env var
+# ============================================================
+
+version: "3.9"
+
+services:
+
+  # ── Main API ──────────────────────────────────────────────
+  hydroguard-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: hydroguard-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DEBUG=false
+      # SQLite (default) — switch to postgres service below for production
+      - DATABASE_URL=sqlite:///backend/weather_anomalies.db
+      # ⚠  CHANGE before any public deployment
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-changeme-set-in-env}
+      # Restrict in production: e.g. https://yourdomain.com
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - HYBRID_WARMUP=true
+      - HYBRID_WARMUP_ROWS=14
+      - HYBRID_WARMUP_CSV=backend/data/pakistan_weather_2000_2024.csv
+    volumes:
+      # Persist model artefacts and datasets across container restarts
+      - ./backend/data:/app/backend/data
+      - ./backend/saved_models:/app/backend/saved_models
+      - ./backend/logs:/app/backend/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on: []
+      # postgres:           # uncomment when using Postgres
+      #   condition: service_healthy
+
+  # ── Flutter Web (optional, built separately) ──────────────
+  # hydroguard-frontend:
+  #   image: nginx:alpine
+  #   container_name: hydroguard-frontend
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./frontend/build/web:/usr/share/nginx/html:ro
+  #   depends_on:
+  #     - hydroguard-api
+
+  # ── PostgreSQL (production) ───────────────────────────────
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: hydroguard-db
+  #   environment:
+  #     POSTGRES_USER:     hydroguard
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword}
+  #     POSTGRES_DB:       weather_anomalies
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U hydroguard"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # ── Redis (optional: for rate limiting / caching) ─────────
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: hydroguard-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+volumes:
+  # postgres_data:
+  # redis_data:

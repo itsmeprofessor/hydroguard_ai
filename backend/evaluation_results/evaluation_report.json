@@ -1,0 +1,118 @@
+{
+  "timestamp": "2026-04-20T01:22:27.200767",
+  "data_file": "D:\\Programming\\FYP\\hydroguard_ai\\backend\\data\\pakistan_weather_2000_2024.csv",
+  "model_info": {
+    "status": "trained",
+    "model_type": "Hybrid Autoencoder + LSTM",
+    "training_metadata": {},
+    "autoencoder_config": {
+      "input_dim": 27,
+      "encoding_dim": 6,
+      "hidden_layers": [
+        32,
+        16,
+        8
+      ],
+      "threshold": 0.3528202859061824
+    },
+    "lstm_config": {
+      "sequence_length": 7,
+      "lstm_units": 32,
+      "threshold": 0.5027421556702942
+    },
+    "preprocessor_info": {
+      "numerical_features": [
+        "prcp",
+        "humidity",
+        "pressure",
+        "cloud_cover",
+        "dew_point",
+        "wspd",
+        "tmin",
+        "tmax",
+        "tavg",
+        "temp_range"
+      ],
+      "categorical_features": [
+        "season",
+        "city",
+        "region"
+      ],
+      "temporal_features": [
+        "month",
+        "day",
+        "dayofweek",
+        "is_weekend"
+      ],
+      "feature_weights_applied": true
+    }
+  },
+  "basic_stats": {
+    "total_samples": 31779,
+    "total_anomalies": 325,
+    "anomaly_percentage": 1.02,
+    "threshold": 0.3528202859061824,
+    "mean_error": 0.12420137763330974,
+    "std_error": 0.09938459626273176,
+    "min_error": 0.020142883730589922,
+    "max_error": 7.441736542071869,
+    "median_error": 0.10858209357319273
+  },
+  "city_analysis": {
+    "Gilgit": {
+      "total": 4383,
+      "anomalies": 6,
+      "rate": 0.14,
+      "mean_error": 0.116279
+    },
+    "Islamabad": {
+      "total": 9132,
+      "anomalies": 69,
+      "rate": 0.76,
+      "mean_error": 0.106444
+    },
+    "Karachi": {
+      "total": 5844,
+      "anomalies": 28,
+      "rate": 0.48,
+      "mean_error": 0.087785
+    },
+    "Lahore": {
+      "total": 3288,
+      "anomalies": 23,
+      "rate": 0.7,
+      "mean_error": 0.12924
+    },
+    "Peshawar": {
+      "total": 5114,
+      "anomalies": 52,
+      "rate": 1.02,
+      "mean_error": 0.153741
+    },
+    "Quetta": {
+      "total": 4018,
+      "anomalies": 147,
+      "rate": 3.66,
+      "mean_error": 0.184447
+    }
+  },
+  "risk_distribution": {
+    "MEDIUM": 182,
+    "HIGH": 80,
+    "CRITICAL": 63
+  },
+  "monthly_anomaly_rate": {
+    "1": 1.22,
+    "2": 1.3,
+    "3": 1.11,
+    "4": 2.15,
+    "5": 1.3,
+    "6": 0.73,
+    "7": 0.56,
+    "8": 0.89,
+    "9": 0.77,
+    "10": 0.74,
+    "11": 0.77,
+    "12": 0.78
+  }
+}

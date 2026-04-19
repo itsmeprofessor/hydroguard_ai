@@ -1,0 +1,141 @@
+# ============================================================
+#  HydroGuard-AI — CI/CD Pipeline
+#  Triggers: push/PR to main or develop
+# ============================================================
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  IMAGE_NAME: hydroguard-ai
+
+jobs:
+
+  # ── 1. Lint & type-check ──────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install lint tools
+        run: pip install ruff mypy
+
+      - name: Ruff (linting + import order)
+        run: ruff check backend/ --select E,W,F,I --ignore E501
+
+      - name: Mypy (type check core modules)
+        run: mypy backend/app/core/config.py backend/app/schemas/__init__.py --ignore-missing-imports
+        continue-on-error: true   # non-blocking until fully annotated
+
+
+  # ── 2. Unit tests ────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run tests
+        env:
+          ADMIN_TOKEN: test-admin-token
+          DATABASE_URL: sqlite:///test.db
+          PYTHONPATH: backend
+        run: pytest tests/ -v --tb=short -q
+
+      - name: Upload coverage (optional)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: .pytest_cache/
+
+
+  # ── 3. Docker build ───────────────────────────────────────
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Smoke test container
+        run: |
+          docker run -d --name smoke \
+            -e ADMIN_TOKEN=ci-token \
+            -e DATABASE_URL="sqlite:///test.db" \
+            -p 8000:8000 \
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          sleep 10
+          curl -sf http://localhost:8000/health
+          docker stop smoke
+
+
+  # ── 4. Deploy (main only) ─────────────────────────────────
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Option A: push to Docker Hub ──
+      # - name: Docker Hub login
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # - name: Push image
+      #   run: |
+      #     docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+      #       ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+      #     docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+
+      # ── Option B: SSH deploy to VPS ──
+      # - name: SSH deploy
+      #   uses: appleboy/ssh-action@v1
+      #   with:
+      #     host:     ${{ secrets.VPS_HOST }}
+      #     username: ${{ secrets.VPS_USER }}
+      #     key:      ${{ secrets.VPS_SSH_KEY }}
+      #     script: |
+      #       cd /opt/hydroguard
+      #       git pull
+      #       docker compose pull
+      #       docker compose up -d --force-recreate
+
+      - name: Deployment placeholder
+        run: echo "Configure deployment target in .github/workflows/ci.yml"
