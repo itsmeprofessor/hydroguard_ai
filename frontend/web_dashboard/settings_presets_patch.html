@@ -1,0 +1,122 @@
+<!--
+HydroGuard-AI — HTML dashboard settings patch (Phase 4)
+────────────────────────────────────────────────────────────────────────────
+The existing admin_dashboard/index.html already hits /analytics, /anomalies,
+/predict, and /health correctly. It just needs two things for full parity
+with the Flutter app:
+
+  1. Backend presets in the settings screen (matches the Flutter 3 presets).
+  2. Nothing else — once the backend adds /database/statistics and /analytics
+     aliases (see backend/MAIN_PY_PATCHES.md + analytics_aliases.py), the
+     dashboard works with zero JS changes.
+
+HOW TO APPLY
+────────────────────────────────────────────────────────────────────────────
+In web_dashboard/admin_dashboard/index.html, find this line (around line 845):
+
+    <div class="form-field" style="margin-bottom:12px">
+      <label>Backend URL</label>
+      <input id="s-api-url" placeholder="http://127.0.0.1:8000"/>
+    </div>
+
+
+<!-- NEW: replaces the lone <input id="s-api-url"/> div -->
+<div class="form-field" style="margin-bottom:12px">
+  <label>Backend URL</label>
+
+  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+    <button type="button" class="btn btn-preset"
+      data-url="http://127.0.0.1:8000">
+      Localhost
+      <span class="preset-sub">127.0.0.1:8000</span>
+    </button>
+    <button type="button" class="btn btn-preset"
+      data-url="http://192.168.1.100:8000">
+      LAN
+      <span class="preset-sub">192.168.1.100:8000</span>
+    </button>
+    <button type="button" class="btn btn-preset"
+      data-url="https://hydroguard-api.onrender.com">
+      Deployed
+      <span class="preset-sub">onrender.com</span>
+    </button>
+  </div>
+
+  <input id="s-api-url" placeholder="https://api.example.com or custom URL"/>
+
+  <div id="s-api-status" style="font-family:var(--mono);font-size:11px;
+       color:var(--dim);margin-top:6px">Not tested yet</div>
+</div>
+
+<style>
+  .btn-preset{
+    display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;
+    padding:6px 10px;font-size:12px;min-width:120px;
+  }
+  .btn-preset.active{
+    background:var(--hydro-s);border-color:rgba(91,140,247,.35);color:var(--text);
+  }
+  .btn-preset .preset-sub{
+    font-family:var(--mono);font-size:9.5px;color:var(--dim);
+    letter-spacing:.04em;
+  }
+  .btn-preset.active .preset-sub{color:var(--muted)}
+</style>
+
+<script>
+/* Dashboard preset wiring — paste near the end of the existing <script> block */
+(function(){
+  const input  = document.getElementById('s-api-url');
+  const status = document.getElementById('s-api-status');
+  const btns   = document.querySelectorAll('.btn-preset');
+
+  function refreshActive() {
+    const cur = (input.value || '').trim().replace(/\/+$/,'');
+    btns.forEach(b => {
+      const u = (b.dataset.url || '').replace(/\/+$/,'');
+      b.classList.toggle('active', u === cur);
+    });
+  }
+
+  btns.forEach(b => {
+    b.addEventListener('click', () => {
+      input.value = b.dataset.url;
+      if (typeof API_URL !== 'undefined') API_URL = b.dataset.url;
+      try { localStorage.setItem('hg_api_url', b.dataset.url); } catch(_) {}
+      refreshActive();
+      pingHealth();
+    });
+  });
+
+  input.addEventListener('change', () => {
+    if (typeof API_URL !== 'undefined') API_URL = input.value.trim();
+    try { localStorage.setItem('hg_api_url', API_URL); } catch(_) {}
+    refreshActive();
+    pingHealth();
+  });
+
+  async function pingHealth() {
+    const start = performance.now();
+    status.textContent = 'Pinging /health …';
+    status.style.color = 'var(--muted)';
+    try {
+      const r = await fetch((API_URL || input.value) + '/health',
+        {cache:'no-store'});
+      const ms = Math.round(performance.now() - start);
+      if (r.ok) {
+        status.textContent = 'OK · ' + ms + ' ms';
+        status.style.color = 'var(--ok)';
+      } else {
+        status.textContent = 'HTTP ' + r.status + ' · ' + ms + ' ms';
+        status.style.color = 'var(--crit)';
+      }
+    } catch (e) {
+      status.textContent = 'Unreachable · ' + e.message;
+      status.style.color = 'var(--crit)';
+    }
+  }
+
+  // Initialize
+  refreshActive();
+})();
+</script>

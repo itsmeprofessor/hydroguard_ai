@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
+from app.api.routes import analytics_aliases
 from app.core.config import APIConfig, LOGGING_CONFIG, STATIC_DIR
 from app.db import init_db
 from app.services import anomaly_service
@@ -48,10 +49,10 @@ def create_app() -> FastAPI:
     # CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins     = APIConfig.CORS_ORIGINS,
-        allow_credentials = True,
-        allow_methods     = ["*"],
-        allow_headers     = ["*"],
+        allow_origins=["*"],  # You can restrict later
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # Serve built frontend assets
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
 
     # Routers
     app.include_router(api_router)
+    app.include_router(analytics_aliases.router)
 
     return app
 

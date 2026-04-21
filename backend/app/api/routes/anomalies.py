@@ -7,7 +7,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from app.core.config import DATA_DIR
-from app.db import AnomalyRepository, get_db
+from sqlalchemy import func
+from app.db import AnomalyRepository,AnomalyRecord, get_db
 from app.schemas import (
     AnomalyListResponse,
     AnomalyRecordResponse,
@@ -89,22 +90,74 @@ async def get_anomaly_statistics(
     end_date:   Optional[date] = Query(None),
     city:       Optional[str]  = Query(None),
 ):
-    if not anomaly_service.is_trained:
-        raise HTTPException(status_code=400, detail="Model not trained.")
-
-    data_files = list(DATA_DIR.glob("*.csv"))
-    if not data_files:
-        raise HTTPException(status_code=404, detail="No CSV found in data/ directory.")
-
+    """DB-backed statistics. Falls back to CSV only if DB is empty."""
     try:
-        stats = anomaly_service.get_anomaly_statistics(
-            data_path  = str(sorted(data_files)[0]),
-            start_date = str(start_date) if start_date else None,
-            end_date   = str(end_date)   if end_date   else None,
-            city       = city,
+        with get_db() as db:
+            repo = AnomalyRepository(db)
+            stats = repo.get_statistics()
+
+            # Optional: apply filters when provided
+            q = db.query(func.count(AnomalyRecord.id)).filter(
+                AnomalyRecord.is_anomaly == True  # noqa: E712
+            )
+            if city:
+                q = q.filter(AnomalyRecord.city == city)
+            if start_date:
+                q = q.filter(AnomalyRecord.date >= start_date)
+            if end_date:
+                q = q.filter(AnomalyRecord.date <= end_date)
+            filtered_count = q.scalar() or 0
+
+            # by_month aggregate
+            by_month_rows = (
+                db.query(func.strftime("%m", AnomalyRecord.date),
+                         func.count(AnomalyRecord.id))
+                  .filter(AnomalyRecord.is_anomaly == True)  # noqa: E712
+                  .group_by(func.strftime("%m", AnomalyRecord.date))
+                  .all()
+            )
+            by_month = {m: c for m, c in by_month_rows if m}
+
+            # date range in DB
+            dmin = db.query(func.min(AnomalyRecord.date)).scalar()
+            dmax = db.query(func.max(AnomalyRecord.date)).scalar()
+
+        # DB-empty fallback: try CSV (only if model is trained)
+        if stats["total_records"] == 0 and anomaly_service.is_trained:
+            data_files = sorted(DATA_DIR.glob("*.csv"))
+            if data_files:
+                csv_stats = anomaly_service.get_anomaly_statistics(
+                    data_path  = str(data_files[0]),
+                    start_date = str(start_date) if start_date else None,
+                    end_date   = str(end_date)   if end_date   else None,
+                    city       = city,
+                )
+                return StatisticsResponse(
+                    total_records    = csv_stats.get("total_records"),
+                    anomaly_count    = csv_stats.get("total_anomalies"),
+                    anomaly_rate     = csv_stats.get("anomaly_percentage"),
+                    by_city          = csv_stats.get("anomalies_by_city"),
+                    by_risk_level    = csv_stats.get("risk_distribution"),
+                    by_month         = csv_stats.get("anomalies_by_month"),
+                    cloudburst_count = 0,
+                    date_range       = None,
+                )
+
+        return StatisticsResponse(
+            total_records    = stats["total_records"],
+            anomaly_count    = filtered_count if (city or start_date or end_date) else stats["total_anomalies"],
+            anomaly_rate     = stats["anomaly_rate"],
+            by_city          = stats["by_city"],
+            by_risk_level    = stats["by_risk_level"],
+            by_month         = by_month,
+            cloudburst_count = stats["cloudburst_alerts"],
+            date_range       = {
+                "start": dmin.isoformat() if dmin else None,
+                "end":   dmax.isoformat() if dmax else None,
+            },
         )
-        return StatisticsResponse(**stats)
     except Exception as e:
+        logger.error(f"statistics failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -1,188 +1,198 @@
-# HydroGuard-AI 🌧️
+# HydroGuard-AI — Phase 1 + 3 + 4 + 5 integration guide
 
-**Weather Anomaly Detection for Flash Flood & Cloudburst Early Warning in Pakistan**
+Full stabilization + UI unification bundle for your Flutter app, HTML
+dashboard, and FastAPI backend.
 
-FastAPI backend (TensorFlow Autoencoder + LSTM Hybrid) + Flutter cross-platform frontend.
-
----
-
-## Project Structure
+## What this bundle contains
 
 ```
-hydroguard_ai/
-├── backend/                        # Python FastAPI backend
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── deps.py             # Shared dependencies (auth)
-│   │   │   └── routes/
-│   │   │       ├── system.py       # GET / /health /model/info
-│   │   │       ├── training.py     # POST /train
-│   │   │       ├── prediction.py   # POST /predict /predict/batch
-│   │   │       ├── anomalies.py    # GET  /anomalies /anomalies/{id}
-│   │   │       └── risk_analytics.py # GET /risk-map /analytics
-│   │   ├── core/
-│   │   │   └── config.py           # All config (env-driven)
-│   │   ├── db/
-│   │   │   └── database.py         # ORM models + repositories
-│   │   ├── schemas/
-│   │   │   └── __init__.py         # Pydantic request/response models
-│   │   ├── services/
-│   │   │   └── anomaly_service.py  # ML inference service (singleton)
-│   │   └── main.py                 # App factory + lifespan
-│   ├── ml/
-│   │   └── models/
-│   │       └── autoencoder.py      # WeatherAutoencoder, LSTMAutoencoder, HybridDetector
-│   ├── utils/
-│   │   ├── preprocessing.py        # WeatherDataPreprocessor
-│   │   ├── city_keys.py            # City name slug/matching utilities
-│   │   └── visualization.py        # Training analysis plots
-│   ├── data/                       # Training CSVs (gitignored except .gitkeep)
-│   ├── saved_models/               # Persisted .keras + .joblib artifacts
-│   ├── logs/                       # Rotating log files
-│   ├── requirements.txt
-│   └── run_server.py               # CLI server launcher
-├── frontend/                       # Flutter app (weather_anomaly_app/)
-├── scripts/
-│   ├── train.py                    # Offline training CLI
-│   ├── evaluate.py                 # Model evaluation + CSV export
-│   └── tune_threshold.py           # Adjust anomaly threshold post-training
-├── tests/
-│   └── test_api.py                 # Pytest API test suite
-├── .env.example                    # Environment variable template
-├── .gitignore
-├── Dockerfile                      # Multi-stage production image
-├── docker-compose.yml
-└── pyproject.toml                  # pytest config
+README.md                             ← this file
+cleanup_old_widgets.sh                ← remove stale widget files safely
+
+lib/                                  ← Flutter code (drop into weather_anomaly_app/lib)
+├── main.dart                         ← REPLACE
+├── core/theme/design_system.dart     ← NEW (1:1 with dashboard CSS tokens)
+├── providers/
+│   ├── location_provider.dart        ← REPLACE (was 0-byte in archive)
+│   └── weather_provider.dart         ← REPLACE (was 0-byte in archive)
+├── screens/
+│   ├── splash_screen.dart            ← REPLACE (enters AppShell)
+│   ├── home_screen.dart              ← REPLACE (dashboard-style)
+│   ├── analytics_screen.dart         ← NEW
+│   ├── history_screen.dart           ← REPLACE (filter + detail sheet)
+│   └── settings_screen.dart          ← REPLACE (backend URL presets)
+├── shell/
+│   └── app_shell.dart                ← NEW (topbar + bottom nav)
+└── widgets/dashboard/
+    ├── dashboard_card.dart           ← NEW
+    ├── metric_card.dart              ← NEW
+    ├── primitives.dart               ← NEW (RiskMeter/ScoreBar/Banner/Badge…)
+    └── charts.dart                   ← NEW (fl_chart styled as Chart.js)
+
+backend/
+├── analytics_aliases.py              ← NEW → app/api/routes/
+├── MAIN_PY_PATCHES.md                ← CORS + router registration snippet
+└── smoke_test.sh                     ← verify every endpoint in < 5 s
+
+web_dashboard/
+└── settings_presets_patch.html       ← optional: add 3 URL presets to admin panel
 ```
 
----
+## Install order
 
-## Quickstart
-
-### 1. Setup
+### 1. Backend (do this first)
 
 ```bash
-cd hydroguard_ai
-cp .env.example .env          # fill in ADMIN_TOKEN, DATABASE_URL etc.
-pip install -r backend/requirements.txt
+cd backend/
+
+# Copy the alias routes module
+cp path/to/bundle/backend/analytics_aliases.py app/api/routes/
+
+# Patch app/main.py per backend/MAIN_PY_PATCHES.md
+#   - Add CORSMiddleware
+#   - Register analytics_aliases.router
+
+# Restart
+uvicorn app.main:app --reload
 ```
 
-### 2. Train the model
+Verify:
 
 ```bash
-python scripts/train.py --data backend/data/pakistan_weather_2000_2024.csv --use-lstm
+chmod +x path/to/bundle/backend/smoke_test.sh
+path/to/bundle/backend/smoke_test.sh http://127.0.0.1:8000
 ```
 
-### 3. Run the API server
+You should see 7 green checkmarks. If `/predict` fails, check the backend
+log — the smoke test sends a minimal valid payload, and any failure there
+usually means a schema mismatch in your `PredictionResponse`.
+
+### 2. Flutter app
 
 ```bash
-cd backend
-python run_server.py --reload   # dev
-python run_server.py            # production
+cd frontend/weather_anomaly_app
+
+# Drop in all lib/ files, preserving paths.
+# Overwrite the 5 REPLACE files; create new directories for NEW files.
+
+# Clean up stale widgets (safe — script checks for imports first)
+chmod +x path/to/bundle/cleanup_old_widgets.sh
+path/to/bundle/cleanup_old_widgets.sh
+
+flutter clean
+flutter pub get
+flutter analyze           # expect 0 errors
+flutter run
 ```
 
-API Swagger: http://127.0.0.1:8000/docs
+### 3. HTML dashboard (optional — for preset UI parity)
 
-### 4. Docker
+Merge `web_dashboard/settings_presets_patch.html` into
+`frontend/web_dashboard/admin_dashboard/index.html` as instructed in the
+comment header. Or skip it — the dashboard already works once the backend
+aliases are live.
+
+## Provider contract (verified against your real files)
+
+The new screens reference these members only. All exist on your providers:
+
+- **`LocationProvider`**: `initialize()`, `getCurrentLocation()`,
+  `setCity(String)` (sync void), `latitude`, `longitude`, `currentCity`,
+  `currentRegion`, `currentCountry`, `currentPosition`, `isLoading`, `error`,
+  `permissionGranted`, `clearError()`
+- **`WeatherProvider`**: `fetchWeatherAndAnalyze(...)`, `analyzeAnomaly()`,
+  `refresh(...)`, `fetchByCity(String, String)`, `loadAnomalyHistory()` (no
+  args), `checkApiHealth()`, `updateLocation(LocationProvider)`,
+  `testExtremeWeather()`, `setMockDataMode(bool)`, `clearErrors()`,
+  `currentWeather`, `currentAnomaly`, `anomalyHistory`, `weatherStatus`,
+  `anomalyStatus`, `weatherError`, `anomalyError`, `isApiHealthy`,
+  `isOffline`, `useMockData`, `isLoading`, `hasData`, `hasAnomaly`,
+  `lastUpdated`, `cacheTimestamp`, `cacheAgeDescription`
+- **`SettingsProvider`**: unchanged. Screen uses `apiUrl`, `setApiUrl`,
+  `notificationsEnabled`, `setNotificationsEnabled`, `autoRefresh`,
+  `setAutoRefresh`, `refreshInterval`, `resetToDefaults`.
+
+## Dependencies
+
+**Zero new packages required.** Every import in the new code
+(`fl_chart`, `geocoding`, `geolocator`, `google_fonts`, `hive_flutter`,
+`intl`, `provider`) is already declared in your `pubspec.yaml`.
+
+### One compatibility note
+
+The new widgets use `Color.withValues(alpha: ...)` — the non-deprecated
+API introduced in **Flutter 3.27 / Dart SDK ≥ 3.6**. Your pubspec allows
+any `sdk: '>=3.0.0 <4.0.0'`, so the actual behavior depends on which
+Flutter you have installed.
+
+Check with:
 
 ```bash
-docker compose up --build
+flutter --version
 ```
 
----
+- **Flutter ≥ 3.27**: compiles cleanly.
+- **Flutter < 3.27**: you'll see ~14 errors like
+  `The method 'withValues' isn't defined for the type 'Color'`.
+  Fix with a one-shot sed:
 
-## Key API Endpoints
+  ```bash
+  cd frontend/weather_anomaly_app
+  grep -rl "withValues" lib/ | \
+    xargs sed -i 's/\.withValues(alpha: \([^)]*\))/\.withOpacity(\1)/g'
+  ```
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/health` | — | System health + model status |
-| GET | `/model/info` | — | Model architecture + training metadata |
-| POST | `/train` | Admin | Train / retrain model |
-| POST | `/predict` | — | Single observation inference |
-| POST | `/predict/batch` | — | Batch inference (single DB session) |
-| GET | `/anomalies` | — | Paginated anomaly records |
-| GET | `/anomalies/statistics` | — | Anomaly stats over dataset |
-| GET | `/risk-map` | — | HRI scores for all Pakistan cities |
-| GET | `/analytics` | Admin | Weekly analytics dashboard data |
+## Backend endpoint mapping
 
-**Admin endpoints** require `X-Admin-Token: <value>` header.
+| Client calls                | Backend route       | Source             |
+|-----------------------------|---------------------|--------------------|
+| `GET /health`               | existed             | `system.py`        |
+| `GET /model/info`           | existed             | `system.py`        |
+| `POST /predict`             | existed             | `prediction.py`    |
+| `POST /predict/batch`       | existed             | `prediction.py`    |
+| `GET /anomalies?…`          | existed             | `anomalies.py`     |
+| `GET /anomalies/statistics` | existed             | `anomalies.py`     |
+| `GET /database/statistics`  | added by patch      | `analytics_aliases.py` |
+| `GET /analytics`            | added by patch      | `analytics_aliases.py` |
 
----
+The Flutter app only needs `/health`, `/predict`, `/anomalies`, and
+`/risk-map`. The two alias routes are purely for the HTML dashboard.
 
-## ML Architecture
+## Demo-day checklist
 
-```
-Input → WeatherDataPreprocessor
-         (impute → weighted-scale → one-hot encode)
-       ↓
-Autoencoder (reconstruction error → anomaly score)
-       +
-LSTM Autoencoder (7-day sequences per city → temporal score)
-       ↓
-HybridAnomalyDetector (combined weighted score)
-       ↓
-HRI Composite (0-100): 40% anomaly + 35% rainfall + 25% regional vulnerability
-       +
-Cloudburst Rule Engine (physics-based risk category)
-```
+- **Localhost mode**: Flutter Settings → tap `Localhost` preset →
+  `Test /health`. Green OK means the whole stack is wired.
+- **LAN mode (phone demo)**: Edit `lib/screens/settings_screen.dart`
+  line ~31 — change `192.168.1.100:8000` to your laptop's actual LAN IP
+  (find with `ip a | grep inet` on Linux or `ipconfig` on Windows).
+  Or just type the real IP once into the custom input field — Hive
+  persists it across restarts.
+- **Deployed mode**: Edit the deployed preset URL on line ~32 to your
+  actual Render / Railway / ngrok URL.
 
-**Flood-focus feature weights** are applied before StandardScaling:
-- `prcp` × 3.0, `humidity` × 2.0, `pressure` × 2.0, `cloud_cover` × 1.5
-- Temperature features × 0.1 (intentionally de-weighted)
+## Runtime URL switching
 
----
+Settings screen → pick a preset, or paste a custom URL, tap the ✓ icon →
+the SettingsProvider persists to Hive and immediately calls
+`AnomalyApiService.setBaseUrl(...)`. Next API call uses the new URL.
+No app restart required.
 
-## Environment Variables
+## What's intentionally NOT done (per your non-negotiables)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ADMIN_TOKEN` | `changeme-set-in-env` | Required for `/train` and `/analytics` |
-| `DATABASE_URL` | SQLite | Switch to PostgreSQL for production |
-| `CORS_ORIGINS` | `*` | Restrict to your frontend domain in prod |
-| `HYBRID_WARMUP` | `true` | Seed LSTM buffers on startup |
-| `MODEL_EPOCHS` | `100` | Override training epochs |
-| `THRESHOLD_K` | `2.5` | Anomaly threshold multiplier |
+- No Riverpod / Bloc migration
+- No Flutter port of the HTML dashboard
+- No ML model retraining or schema changes
+- No new architectural layers (no GoRouter, no DI container, no
+  clean-architecture rewrite)
+- No visual changes to the HTML dashboard beyond the optional settings patch
 
----
+## Files you can safely delete after drop-in
 
-## Scripts
+The `cleanup_old_widgets.sh` script handles this, but for reference:
 
-```bash
-# Train
-python scripts/train.py --data backend/data/... [--use-lstm] [--epochs 200]
+- `lib/widgets/hri_gauge.dart` — nothing imports it anymore
+- `lib/widgets/metric_card.dart` — replaced by `widgets/dashboard/metric_card.dart`
+- `lib/utils/app_theme.dart` — replaced by `core/theme/design_system.dart`
 
-# Evaluate (generates evaluation_results/detected_anomalies.csv + report.json)
-python scripts/evaluate.py
-
-# Tune threshold without retraining
-python scripts/tune_threshold.py --k 3.0
-
-# Run tests
-pytest tests/ -v
-```
-
----
-
-## Docker & CI/CD
-
-- **Multi-stage Dockerfile**: deps layer cached separately → fast rebuilds
-- **Non-root runtime user** (`hydroguard`)
-- **HEALTHCHECK** via `curl /health`
-- **GitHub Actions** (`.github/workflows/ci.yml`):
-  - Lint (Ruff), type-check (mypy), pytest, Docker build + smoke test
-  - Deployment hooks (Docker Hub / SSH VPS) — uncomment to enable
-
----
-
-## Development
-
-```bash
-# Type check
-mypy backend/app/core/config.py backend/app/schemas/__init__.py --ignore-missing-imports
-
-# Lint
-ruff check backend/ --select E,W,F,I
-
-# Format
-ruff format backend/
-```
+The script only deletes these if no file outside the deleted set still
+imports them, so you can run it safely.

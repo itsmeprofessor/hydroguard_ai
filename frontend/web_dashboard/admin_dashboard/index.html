@@ -247,6 +247,18 @@ input,select{font-family:inherit}
 .btn.primary{background:var(--hydro);border-color:var(--hydro);color:white}
 .btn.primary:hover{opacity:.85}
 .btn.danger{background:var(--crit);border-color:var(--crit);color:white}
+.btn-preset{
+    display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;
+    padding:6px 10px;font-size:12px;min-width:120px;
+  }
+  .btn-preset.active{
+    background:var(--hydro-s);border-color:rgba(91,140,247,.35);color:var(--text);
+  }
+  .btn-preset .preset-sub{
+    font-family:var(--mono);font-size:9.5px;color:var(--dim);
+    letter-spacing:.04em;
+  }
+  .btn-preset.active .preset-sub{color:var(--muted)}
 
 /* ── Metrics grid ── */
 .metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
@@ -379,6 +391,8 @@ input,select{font-family:inherit}
   display:flex;align-items:center;gap:14px;margin-bottom:16px;
   animation:crit-glow 2s infinite;
 }
+
+
 @keyframes crit-glow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.3)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0)}}
 .crit-icon{width:36px;height:36px;background:var(--crit);border-radius:8px;display:grid;place-items:center;flex-shrink:0}
 .crit-title{font-size:13px;font-weight:700;color:white}
@@ -842,7 +856,32 @@ input,select{font-family:inherit}
         <div class="settings-section">
           <h3>API Connection</h3>
           <div class="card">
-            <div class="form-field" style="margin-bottom:12px"><label>Backend URL</label><input id="s-api-url" placeholder="http://127.0.0.1:8000"/></div>
+            <div class="form-field" style="margin-bottom:12px">
+              <label>Backend URL</label>
+            
+              <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+                <button type="button" class="btn btn-preset"
+                  data-url="http://127.0.0.1:8000">
+                  Localhost
+                  <span class="preset-sub">127.0.0.1:8000</span>
+                </button>
+                <button type="button" class="btn btn-preset"
+                  data-url="http://192.168.1.100:8000">
+                  LAN
+                  <span class="preset-sub">192.168.1.100:8000</span>
+                </button>
+                <button type="button" class="btn btn-preset"
+                  data-url="https://hydroguard-api.onrender.com">
+                  Deployed
+                  <span class="preset-sub">onrender.com</span>
+                </button>
+              </div>
+            
+              <input id="s-api-url" placeholder="https://api.example.com or custom URL"/>
+            
+              <div id="s-api-status" style="font-family:var(--mono);font-size:11px;
+                   color:var(--dim);margin-top:6px">Not tested yet</div>
+            </div>
             <div class="form-field" style="margin-bottom:12px"><label>Admin token</label><input id="s-admin-token" type="password" placeholder="Your admin token"/></div>
             <div style="display:flex;gap:8px">
               <button class="btn primary" onclick="saveSettings()">Save</button>
@@ -1479,6 +1518,61 @@ function hriColor(label) {
 function riskColor(rl) {
   return {LOW:'#34d399',MEDIUM:'#fbbf24',HIGH:'#f97316',CRITICAL:'#ef4444'}[rl]||'#34d399';
 }
+/* Dashboard preset wiring — paste near the end of the existing <script> block */
+  (function(){
+  const input  = document.getElementById('s-api-url');
+  const status = document.getElementById('s-api-status');
+  const btns   = document.querySelectorAll('.btn-preset');
+
+  function refreshActive() {
+    const cur = (input.value || '').trim().replace(/\/+$/,'');
+    btns.forEach(b => {
+      const u = (b.dataset.url || '').replace(/\/+$/,'');
+      b.classList.toggle('active', u === cur);
+    });
+  }
+
+  btns.forEach(b => {
+    b.addEventListener('click', () => {
+      input.value = b.dataset.url;
+      if (typeof API_URL !== 'undefined') API_URL = b.dataset.url;
+      try { localStorage.setItem('hg_api_url', b.dataset.url); } catch(_) {}
+      refreshActive();
+      pingHealth();
+    });
+  });
+
+  input.addEventListener('change', () => {
+    if (typeof API_URL !== 'undefined') API_URL = input.value.trim();
+    try { localStorage.setItem('hg_api_url', API_URL); } catch(_) {}
+    refreshActive();
+    pingHealth();
+  });
+
+  async function pingHealth() {
+    const start = performance.now();
+    status.textContent = 'Pinging /health …';
+    status.style.color = 'var(--muted)';
+    try {
+      const r = await fetch((API_URL || input.value) + '/health',
+        {cache:'no-store'});
+      const ms = Math.round(performance.now() - start);
+      if (r.ok) {
+        status.textContent = 'OK · ' + ms + ' ms';
+        status.style.color = 'var(--ok)';
+      } else {
+        status.textContent = 'HTTP ' + r.status + ' · ' + ms + ' ms';
+        status.style.color = 'var(--crit)';
+      }
+    } catch (e) {
+      status.textContent = 'Unreachable · ' + e.message;
+      status.style.color = 'var(--crit)';
+    }
+  }
+
+  // Initialize
+  refreshActive();
+})();
 </script>
 </body>
 </html>

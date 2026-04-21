@@ -67,8 +67,8 @@ async def get_risk_map():
     return RiskMapResponse(entries=entries, count=len(entries))
 
 
-@router.get("/analytics", response_model=AnalyticsResponse, tags=["Admin"])
-async def get_analytics(_admin=Depends(require_admin)):
+@router.get("/admin/analytics", response_model=AnalyticsResponse, tags=["Admin"])
+async def get_admin_analytics(_admin=Depends(require_admin)):
     """Admin analytics — requires X-Admin-Token header."""
     try:
         with get_db() as db:
