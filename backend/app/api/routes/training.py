@@ -1,15 +1,17 @@
-"""Training routes."""
+"""Training routes — ADMIN only."""
+
+from __future__ import annotations
 
 import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.deps import require_admin
 from app.core.config import DATA_DIR
 from app.db import TrainingRepository, get_db
 from app.schemas import TrainingRequest, TrainingResponse
 from app.services import anomaly_service
-from app.api.deps import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/train", tags=["Training"])
@@ -18,9 +20,8 @@ router = APIRouter(prefix="/train", tags=["Training"])
 @router.post("", response_model=TrainingResponse)
 async def train_model(
     request: TrainingRequest,
-    _admin=Depends(require_admin),
+    _admin = Depends(require_admin),
 ):
-    """Train / retrain the model. Requires X-Admin-Token header."""
     data_path = request.data_path
     if not data_path:
         data_files = list(DATA_DIR.glob("*.csv"))

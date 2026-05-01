@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py -3.13 -m pip show fastapi)",
+      "Bash(py -3.11 -m pip show fastapi)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe -c \"import bcrypt; print\\(bcrypt.__version__\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(xargs ls *)",
+      "Bash(node -e ' *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(curl -sI \"https://unpkg.com/@babel/standalone@7.26.10/babel.min.js\")"
+    ]
+  }
+}

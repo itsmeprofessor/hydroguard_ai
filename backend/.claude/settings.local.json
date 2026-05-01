@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/Programming/FYP/frontend design for fyp/**)",
+      "Bash(python -c \"import zipfile; z=zipfile.ZipFile\\('NewWebAPP.zip'\\); print\\('\\\\n'.join\\(z.namelist\\(\\)\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

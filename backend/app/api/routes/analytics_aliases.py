@@ -22,9 +22,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.db.database import get_db
-from app.services.anomaly_service import (
-    AnomalyRepository,
-)  # adjust import path if different in your tree
+from app.db.repositories.anomaly_repo import AnomalyRepository
 
 router = APIRouter(tags=["Analytics (dashboard aliases)"])
 

@@ -97,19 +97,20 @@ class CloudburstRisk(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    city:          str
-    date:          Optional[str]
-    anomaly_score: float
-    threshold:     float
-    is_anomaly:    bool
-    risk_level:    str
-    hri_score:     Optional[int]   = None
-    hri_label:     Optional[str]   = None
-    hri_components: Optional[Dict[str, float]] = None
-    cloudburst_risk: Optional[Dict[str, Any]]  = None
-    remarks:              Optional[str]          = None
-    feature_contributions: Optional[Dict]        = None
-    detailed_explanation:  Optional[Dict]        = None
+    city:             str
+    date:             Optional[str]
+    anomaly_score:    float
+    consensus_score:  Optional[float] = None
+    threshold:        float
+    is_anomaly:       bool
+    risk_level:       str
+    hri_score:        Optional[int]   = None
+    hri_label:        Optional[str]   = None
+    hri_components:   Optional[Dict[str, float]] = None
+    cloudburst_risk:  Optional[Dict[str, Any]]   = None
+    remarks:               Optional[str]  = None
+    feature_contributions: Optional[Dict] = None
+    detailed_explanation:  Optional[Dict] = None
 
 
 class BatchPredictionResponse(BaseModel):
@@ -150,11 +151,13 @@ class AnomalyListResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    status:       str
-    version:      str
-    model_loaded: bool
-    model_type:   Optional[str]
-    timestamp:    str
+    status:        str
+    version:       str
+    model_loaded:  bool
+    model_type:    Optional[str]
+    timestamp:     str
+    model_version: Optional[int]       = None
+    ws_connections: Optional[Dict]     = None
 
 
 class ModelInfoResponse(BaseModel):

@@ -13,12 +13,13 @@ Key design decisions:
 
 from __future__ import annotations
 
+import json
 import logging
 from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -37,126 +38,6 @@ from utils.preprocessing import WeatherDataPreprocessor, load_and_prepare_data
 
 logger = logging.getLogger(__name__)
 
-class AnomalyRepository:
-    def __init__(self, db: Session):
-        self.db = db
-
-    def create(
-        self,
-        prediction_result: Dict[str, Any],
-        weather_data: Dict[str, Any],
-    ) -> AnomalyRecord:
-        date_raw = prediction_result.get("date")
-        try:
-            parsed_date = (
-                datetime.strptime(date_raw, "%Y-%m-%d")
-                if isinstance(date_raw, str)
-                else date_raw
-            )
-        except Exception:
-            parsed_date = datetime.utcnow()
-
-        cb = prediction_result.get("cloudburst_risk", {})
-
-        record = AnomalyRecord(
-            city        = prediction_result.get("city"),
-            region      = weather_data.get("region"),
-            date        = parsed_date,
-            tmin        = weather_data.get("tmin"),
-            tmax        = weather_data.get("tmax"),
-            tavg        = weather_data.get("tavg"),
-            prcp        = weather_data.get("prcp"),
-            wspd        = weather_data.get("wspd"),
-            humidity    = weather_data.get("humidity"),
-            pressure    = weather_data.get("pressure"),
-            dew_point   = weather_data.get("dew_point"),
-            cloud_cover = weather_data.get("cloud_cover"),
-            anomaly_score            = prediction_result.get("anomaly_score"),
-            threshold                = prediction_result.get("threshold"),
-            is_anomaly               = prediction_result.get("is_anomaly"),
-            risk_level               = prediction_result.get("risk_level"),
-            hri_score                = prediction_result.get("hri_score"),
-            hri_label                = prediction_result.get("hri_label"),
-            cloudburst_risk_score    = cb.get("risk_score"),
-            cloudburst_risk_category = cb.get("risk_category"),
-            is_cloudburst_likely     = cb.get("is_cloudburst_likely", False),
-            remarks                  = prediction_result.get("remarks"),
-            feature_contributions    = prediction_result.get("feature_contributions"),
-            detailed_explanation     = prediction_result.get("detailed_explanation"),
-        )
-        self.db.add(record)
-        self.db.commit()
-        self.db.refresh(record)
-        return record
-
-    def get_by_id(self, record_id: int) -> Optional[AnomalyRecord]:
-        return self.db.query(AnomalyRecord).filter(AnomalyRecord.id == record_id).first()
-
-    def get_all(
-        self,
-        skip: int = 0,
-        limit: int = 100,
-        city: Optional[str] = None,
-        risk_level: Optional[str] = None,
-        start_date: Optional[datetime] = None,
-        end_date:   Optional[datetime] = None,
-        is_anomaly_only: bool = True,
-    ) -> List[AnomalyRecord]:
-        q = self.db.query(AnomalyRecord)
-        if is_anomaly_only:
-            q = q.filter(AnomalyRecord.is_anomaly == True)  # noqa: E712
-        if city:
-            q = q.filter(AnomalyRecord.city == city)
-        if risk_level:
-            q = q.filter(AnomalyRecord.risk_level == risk_level)
-        if start_date:
-            q = q.filter(AnomalyRecord.date >= start_date)
-        if end_date:
-            q = q.filter(AnomalyRecord.date <= end_date)
-        return q.order_by(AnomalyRecord.date.desc()).offset(skip).limit(limit).all()
-
-    def get_count(
-        self,
-        city: Optional[str] = None,
-        risk_level: Optional[str] = None,
-        is_anomaly_only: bool = True,
-    ) -> int:
-        q = self.db.query(AnomalyRecord)
-        if is_anomaly_only:
-            q = q.filter(AnomalyRecord.is_anomaly == True)  # noqa: E712
-        if city:
-            q = q.filter(AnomalyRecord.city == city)
-        if risk_level:
-            q = q.filter(AnomalyRecord.risk_level == risk_level)
-        return q.count()
-
-    def get_statistics(self) -> Dict[str, Any]:
-        total     = self.db.query(func.count(AnomalyRecord.id)).scalar()
-        anomalies = self.db.query(func.count(AnomalyRecord.id)).filter(
-            AnomalyRecord.is_anomaly == True  # noqa: E712
-        ).scalar()
-        by_city = dict(
-            self.db.query(AnomalyRecord.city, func.count(AnomalyRecord.id))
-            .filter(AnomalyRecord.is_anomaly == True)  # noqa: E712
-            .group_by(AnomalyRecord.city).all()
-        )
-        by_risk = dict(
-            self.db.query(AnomalyRecord.risk_level, func.count(AnomalyRecord.id))
-            .filter(AnomalyRecord.is_anomaly == True)  # noqa: E712
-            .group_by(AnomalyRecord.risk_level).all()
-        )
-        cloudburst = self.db.query(func.count(AnomalyRecord.id)).filter(
-            AnomalyRecord.is_cloudburst_likely == True  # noqa: E712
-        ).scalar()
-
-        return {
-            "total_records":    total,
-            "total_anomalies":  anomalies,
-            "anomaly_rate":     round(anomalies / total * 100, 2) if total else 0.0,
-            "by_city":          by_city,
-            "by_risk_level":    by_risk,
-            "cloudburst_alerts": cloudburst,
-        }
 # ============================================================
 #  Per-city LSTM sequence buffer
 # ============================================================
@@ -245,6 +126,27 @@ def compute_hri(
             "regional_vulnerability": round(vul,       4),
         },
     }
+
+
+# ============================================================
+#  Consensus scoring — prevents rule engine from dominating
+# ============================================================
+
+def compute_consensus_score(
+    hybrid_score:     float,
+    cloudburst_score: float,
+    hri_score:        int,
+    weights:          Tuple[float, float, float] = (0.45, 0.35, 0.20),
+) -> float:
+    """
+    Single final score combining ML + rule engine + HRI.
+    All inputs normalised to [0, 1].
+    """
+    return (
+        weights[0] * float(hybrid_score)
+        + weights[1] * float(cloudburst_score)
+        + weights[2] * (float(hri_score) / 100.0)
+    )
 
 
 # ============================================================
@@ -455,10 +357,55 @@ class AnomalyDetectionService:
 
     def _save_models(self) -> None:
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Archive previous version
+        manifest_path = MODELS_DIR / "manifest.json"
+        if manifest_path.exists():
+            try:
+                prev = json.loads(manifest_path.read_text())
+                prev_ver = prev.get("version", 0)
+                archive_dir = MODELS_DIR / "archive" / f"v{prev_ver}"
+                archive_dir.mkdir(parents=True, exist_ok=True)
+                import shutil
+                for item in ["autoencoder_model", "lstm_model", "preprocessor.joblib"]:
+                    src = MODELS_DIR / item
+                    if src.exists():
+                        dst = archive_dir / item
+                        if src.is_dir():
+                            if dst.exists():
+                                shutil.rmtree(dst)
+                            shutil.copytree(src, dst)
+                        else:
+                            shutil.copy2(src, dst)
+            except Exception as e:
+                logger.warning(f"Archive of previous model failed: {e}")
+
         self.autoencoder.save(MODELS_DIR / "autoencoder_model")
         if self.lstm_autoencoder:
             self.lstm_autoencoder.save(MODELS_DIR / "lstm_model")
         self.preprocessor.save(MODELS_DIR / "preprocessor.joblib")
+
+        # Write manifest
+        try:
+            prev_manifest = {}
+            if manifest_path.exists():
+                prev_manifest = json.loads(manifest_path.read_text())
+            version = prev_manifest.get("version", 0) + 1
+            ae_meta = self.training_metadata.get("autoencoder", {}) or {}
+            ast_meta = self.training_metadata.get("anomaly_stats", {}) or {}
+            manifest = {
+                "version":       version,
+                "trained_at":    datetime.utcnow().isoformat() + "Z",
+                "ae_threshold":  ae_meta.get("threshold"),
+                "anomaly_rate":  ast_meta.get("anomaly_percentage"),
+                "epochs":        ae_meta.get("epochs_trained"),
+                "has_lstm":      self.lstm_autoencoder is not None,
+            }
+            manifest_path.write_text(json.dumps(manifest, indent=2))
+            logger.info(f"Model manifest written: version={version}")
+        except Exception as e:
+            logger.warning(f"Manifest write failed: {e}")
+
         logger.info(f"Models saved → {MODELS_DIR}")
 
     # --------------------------------------------------------
@@ -557,16 +504,22 @@ class AnomalyDetectionService:
         df   = pd.DataFrame([data])
         X, _ = self.preprocessor.transform(df)
 
-        city = data.get("city", "Unknown")
-        prcp = float(data.get("prcp", 0) or 0)
+        city  = data.get("city", "Unknown")
+        prcp  = float(data.get("prcp", 0) or 0)
+        month = int(data.get("month", datetime.now().month) or datetime.now().month)
+
+        # Seasonal threshold multiplier
+        seasonal_mult = self.config.SEASONAL_THRESHOLD_MULTIPLIER.get(month, 1.0)
 
         # Autoencoder point-wise scoring
         ae_is_anomaly, ae_errors = self.autoencoder.detect_anomalies(X)
         ae_error     = float(ae_errors[0])
-        anomaly      = bool(ae_is_anomaly[0])
+        # Apply seasonal multiplier to threshold before flagging
+        effective_threshold = float(self.autoencoder.threshold) * seasonal_mult
+        anomaly      = ae_error > effective_threshold
         risk_level   = self.autoencoder.get_risk_level(ae_error)
         final_score  = ae_error
-        final_thresh = float(self.autoencoder.threshold)
+        final_thresh = effective_threshold
         score_kind   = "autoencoder_reconstruction_error"
 
         hybrid_payload: Optional[Dict[str, Any]] = None
@@ -619,15 +572,6 @@ class AnomalyDetectionService:
                 logger.warning(f"Hybrid scoring failed: {e}")
                 hybrid_payload = {"enabled": True, "error": str(e)}
 
-        # HRI
-        hri = compute_hri(
-            anomaly_score     = ae_error,
-            anomaly_threshold = float(self.autoencoder.threshold),
-            prcp              = prcp,
-            city              = city,
-            config            = self.config,
-        )
-
         # Feature importance
         feature_names = (
             self.preprocessor.numerical_features
@@ -637,12 +581,31 @@ class AnomalyDetectionService:
         feature_importance = self.autoencoder.get_feature_importance(X, feature_names[: X.shape[1]])
 
         cloudburst_risk = self._assess_cloudburst_risk(data)
-        explanation     = self._generate_explanation(data, float(final_score), anomaly, feature_importance, cloudburst_risk)
+
+        # HRI
+        hri = compute_hri(
+            anomaly_score     = ae_error,
+            anomaly_threshold = float(self.autoencoder.threshold),
+            prcp              = prcp,
+            city              = city,
+            config            = self.config,
+        )
+
+        explanation = self._generate_explanation(data, float(final_score), anomaly, feature_importance, cloudburst_risk)
+
+        # Consensus score — prevents rule engine from dominating
+        consensus = compute_consensus_score(
+            hybrid_score     = final_score if score_kind == "hybrid_normalized_combined_score"
+                               else min(ae_error / (float(self.autoencoder.threshold) + 1e-8), 1.0),
+            cloudburst_score = cloudburst_risk.get("risk_score", 0.0),
+            hri_score        = hri["hri_score"],
+        )
 
         return {
             "city":                  city,
             "date":                  data.get("date", str(datetime.now().date())),
             "anomaly_score":         round(float(final_score), 6),
+            "consensus_score":       round(float(consensus), 6),
             "threshold":             round(float(final_thresh), 6),
             "is_anomaly":            anomaly,
             "risk_level":            risk_level,
@@ -657,7 +620,9 @@ class AnomalyDetectionService:
             "ae_details": {
                 "reconstruction_error": round(ae_error, 6),
                 "threshold":            round(float(self.autoencoder.threshold), 6),
-                "is_anomaly":           bool(ae_is_anomaly[0]),
+                "seasonal_multiplier":  seasonal_mult,
+                "effective_threshold":  round(effective_threshold, 6),
+                "is_anomaly":           bool(ae_error > effective_threshold),
                 "severity":             self.autoencoder.get_risk_level(ae_error),
             },
             "score_kind": score_kind,

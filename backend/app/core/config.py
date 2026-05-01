@@ -24,7 +24,7 @@ BACKEND_DIR:  Path = Path(__file__).parents[1]          # .../backend/
 DATA_DIR:     Path = BACKEND_DIR / "data"
 MODELS_DIR:   Path = BACKEND_DIR / "saved_models"
 LOGS_DIR:     Path = BACKEND_DIR / "logs"
-STATIC_DIR:   Path = BACKEND_DIR.parent / "frontend"    # served as /static
+STATIC_DIR:   Path = BACKEND_DIR.parent.parent / "frontend" / "web_dashboard" / "admin_dashboard"    # served as /static
 
 for _d in (DATA_DIR, MODELS_DIR, LOGS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
@@ -45,6 +45,12 @@ DATABASE_URL: str = os.getenv(
 # ============================================================
 
 ADMIN_TOKEN: str = os.getenv("ADMIN_TOKEN", "changeme-set-in-env")
+
+# JWT
+JWT_SECRET_KEY:               str = os.getenv("JWT_SECRET_KEY", "CHANGE-ME-generate-with-secrets.token_hex(32)")
+JWT_ALGORITHM:                str = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES:  int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS:    int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS",   "7"))
 
 
 # ============================================================
@@ -112,6 +118,13 @@ class ModelConfig:
     EARLY_STOPPING_PATIENCE:   int   = 15
 
     THRESHOLD_K: float = float(os.getenv("THRESHOLD_K", "2.5"))
+
+    # Per-month anomaly threshold multiplier (monsoon months get higher tolerance)
+    SEASONAL_THRESHOLD_MULTIPLIER: dict[int, float] = {
+        1: 1.0,  2: 1.0,  3: 1.0,  4: 1.1,  5: 1.2,
+        6: 1.4,  7: 1.5,  8: 1.5,  9: 1.3,  10: 1.1,
+        11: 1.0, 12: 1.0,
+    }
 
     RISK_THRESHOLDS: dict[str, float] = {
         "LOW":      0.50,
