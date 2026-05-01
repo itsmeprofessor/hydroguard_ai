@@ -1,198 +1,364 @@
-# HydroGuard-AI — Phase 1 + 3 + 4 + 5 integration guide
+Here is a clean, production-ready `README.md` for your **HydroGuard-AI v3.1** project. I’ve structured it like a real open-source + industry-grade ML system so it’s suitable for GitHub, portfolio, and deployment documentation.
 
-Full stabilization + UI unification bundle for your Flutter app, HTML
-dashboard, and FastAPI backend.
+---
 
-## What this bundle contains
+```markdown
+# 🌊 HydroGuard-AI v3.1
+
+**Production-grade Flood & Weather Anomaly Detection System for Pakistan**
+
+HydroGuard-AI is a full-stack AI system designed to predict weather anomalies, flood risks, and cloudburst events across 10 major cities in Pakistan using hybrid deep learning models and real-time APIs.
+
+It combines:
+- 🤖 Machine Learning (Autoencoder + LSTM + Bahdanau Attention)
+- ⚡ FastAPI backend with WebSocket streaming
+- 🌐 Web-first citizen application
+- 🧠 Admin intelligence dashboard
+- 🐳 Dockerized production deployment
+
+---
+
+## 📌 Supported Cities
+
+- Islamabad
+- Lahore
+- Karachi
+- Peshawar
+- Quetta
+- Gilgit
+
+---
+
+## 🧠 Core Architecture
+
+### 🔙 Backend (FastAPI)
+Located in `backend/`
+
+Features:
+- City-specific hybrid ML models (Autoencoder + LSTM + Attention)
+- JWT authentication (access + refresh rotation)
+- Role-based access control (USER / ANALYST / ADMIN)
+- WebSocket real-time anomaly & risk broadcasting
+- SQLAlchemy ORM with PostgreSQL / SQLite support
+- Rate limiting (SlowAPI)
+- Heuristic fallback system for untrained cities
+
+---
+
+### 🤖 ML System
+
+Each city has its own trained model:
+
+#### 🧩 Hybrid Model Architecture
+- Autoencoder (feature reconstruction anomaly detection)
+- LSTM (7-step temporal forecasting)
+- Bahdanau Attention (sequence focus weighting)
+
+#### ⚙️ Final Prediction Formula
+```
+
+Hybrid Score = 0.55 × AE Score + 0.45 × LSTM Score
+
+````
+
+#### 📊 Output Structure
+```json
+{
+  "risk_level": "Low | Medium | High",
+  "anomaly_score": 0.78,
+  "confidence": 0.91,
+  "is_anomaly": true,
+  "ae_score": 0.72,
+  "lstm_score": 0.81,
+  "hri_score": 64
+}
+````
+
+---
+
+### 🌐 Public Citizen Web App
+
+Location: `frontend/citizen_app/`
+
+A lightweight, mobile-first web app:
+
+* 5 screens:
+
+  * Home
+  * Forecast
+  * Alerts
+  * Learn
+  * Settings
+* Live risk visualization
+* 5-minute polling system (no WebSockets)
+* Multi-language support:
+
+  * English
+  * Urdu
+  * Punjabi
+  * Pashto
+  * Sindhi
+  * Balochi
+* Dark / Light mode
+* Fully based on provided UI design ZIP
+
+---
+
+### 🧑‍💼 Admin Dashboard
+
+Location: `frontend/web_dashboard/admin_dashboard/`
+
+Features:
+
+* JWT-secured admin panel
+* Real-time WebSocket monitoring
+* Pakistan risk heatmap (SVG-based)
+* Model training controls per city
+* Analytics & anomaly tracking
+* User & system management tools
+
+---
+
+## ⚙️ Backend Features
+
+### 🔐 Authentication System
+
+* JWT Access Token (30 min)
+* Refresh Token Rotation (7 days)
+* Secure password hashing (bcrypt)
+* Role-based access control
+
+### 📡 API Endpoints
+
+#### Core
+
+* `GET /health`
+* `GET /model/info`
+* `GET /risk-map`
+
+#### Authentication
+
+* `POST /auth/register`
+* `POST /auth/login`
+* `POST /auth/refresh`
+* `GET /auth/me`
+
+#### Predictions
+
+* `POST /predict`
+* `POST /predict/batch`
+
+#### Cities
+
+* `GET /cities`
+* `GET /cities/{city}/risk`
+* `GET /cities/{city}/forecast`
+* `POST /cities/{city}/predict`
+* `POST /cities/{city}/train`
+
+#### Analytics
+
+* `GET /anomalies`
+* `GET /analytics`
+* `GET /admin/analytics`
+
+#### WebSockets
+
+* `/ws/anomalies`
+* `/ws/risk-map`
+* `/ws/health`
+
+---
+
+## 🧪 Machine Learning Pipeline
+
+### 📊 Features Used
+
+* Precipitation (PRCP)
+* Humidity
+* Pressure
+* Cloud Cover
+* Temperature (TAVG, TMAX, TMIN)
+* Wind Speed
+* Dew Point
+
+### ⚙️ Preprocessing
+
+* Median Imputation
+* Standard Scaling
+* MinMax Scaling (temporal features)
+* One-hot encoding (categorical)
+
+### 🌧️ Cloudburst Detection Engine
+
+Weighted heuristic:
 
 ```
-README.md                             ← this file
-cleanup_old_widgets.sh                ← remove stale widget files safely
+0.45 × precipitation
++ 0.25 × pressure
++ 0.20 × humidity
++ 0.10 × cloud cover
+```
 
-lib/                                  ← Flutter code (drop into weather_anomaly_app/lib)
-├── main.dart                         ← REPLACE
-├── core/theme/design_system.dart     ← NEW (1:1 with dashboard CSS tokens)
-├── providers/
-│   ├── location_provider.dart        ← REPLACE (was 0-byte in archive)
-│   └── weather_provider.dart         ← REPLACE (was 0-byte in archive)
-├── screens/
-│   ├── splash_screen.dart            ← REPLACE (enters AppShell)
-│   ├── home_screen.dart              ← REPLACE (dashboard-style)
-│   ├── analytics_screen.dart         ← NEW
-│   ├── history_screen.dart           ← REPLACE (filter + detail sheet)
-│   └── settings_screen.dart          ← REPLACE (backend URL presets)
-├── shell/
-│   └── app_shell.dart                ← NEW (topbar + bottom nav)
-└── widgets/dashboard/
-    ├── dashboard_card.dart           ← NEW
-    ├── metric_card.dart              ← NEW
-    ├── primitives.dart               ← NEW (RiskMeter/ScoreBar/Banner/Badge…)
-    └── charts.dart                   ← NEW (fl_chart styled as Chart.js)
+---
 
+## 🏗️ System Design
+
+### Backend Flow
+
+```
+Request → Router → Auth → Service Layer → ML Model → Repository → DB → WebSocket Broadcast
+```
+
+### Model Flow
+
+```
+Weather Data → Preprocessor → AE + LSTM → Attention → Hybrid Score → Risk Engine → HRI Output
+```
+
+---
+
+## 🐳 Docker Deployment
+
+### Full Stack
+
+```bash
+docker compose up --build
+```
+
+Includes:
+
+* FastAPI Backend
+* PostgreSQL 16
+* Redis 7
+* Nginx Reverse Proxy
+
+---
+
+## 🚀 Run Locally
+
+### Backend
+
+```bash
+pip install -r backend/requirements.txt
+python backend/run_server.py --reload
+```
+
+### Citizen App
+
+```bash
+cd frontend/citizen_app
+python -m http.server 5500
+```
+
+### Admin Dashboard
+
+```bash
+cd frontend/web_dashboard/admin_dashboard
+python -m http.server 5501
+```
+
+---
+
+## 🧠 Model Training
+
+### Train All Cities
+
+```bash
+python scripts/train_city.py --all --epochs 150
+```
+
+### Train Single City
+
+```bash
+python scripts/train_city.py --city Islamabad --epochs 200
+```
+
+### AE Only Mode
+
+```bash
+python scripts/train_city.py --city Karachi --no-lstm
+```
+
+---
+
+## 📦 Project Structure
+
+```
 backend/
-├── analytics_aliases.py              ← NEW → app/api/routes/
-├── MAIN_PY_PATCHES.md                ← CORS + router registration snippet
-└── smoke_test.sh                     ← verify every endpoint in < 5 s
+ ├── app/
+ │   ├── api/
+ │   ├── core/
+ │   ├── ml/
+ │   ├── services/
+ │   ├── db/
+ │   ├── auth/
+ │   └── realtime/
+ ├── saved_models/
+ ├── run_server.py
 
-web_dashboard/
-└── settings_presets_patch.html       ← optional: add 3 URL presets to admin panel
+frontend/
+ ├── citizen_app/
+ └── web_dashboard/
+
+scripts/
+tests/
+docker-compose.yml
+nginx/
 ```
 
-## Install order
+---
 
-### 1. Backend (do this first)
+## 🔐 Key Design Constraints
 
-```bash
-cd backend/
+* ❌ No BiLSTM (causal forecasting only)
+* ❌ No global ML model (city-specific only)
+* ❌ WebSocket only for admin + backend (citizen app uses polling)
+* ❌ Strict adherence to provided UI design ZIP
+* ⚠️ SQLite not safe for multi-worker production
+* ⚠️ JWT secret must be configured in production
 
-# Copy the alias routes module
-cp path/to/bundle/backend/analytics_aliases.py app/api/routes/
+---
 
-# Patch app/main.py per backend/MAIN_PY_PATCHES.md
-#   - Add CORSMiddleware
-#   - Register analytics_aliases.router
+## 📈 System Highlights
 
-# Restart
-uvicorn app.main:app --reload
+* 🔥 Real-time anomaly detection
+* 🌧️ Flood & cloudburst prediction engine
+* 🧠 Hybrid deep learning architecture
+* 🏙️ City-specific intelligence models
+* 📡 Live WebSocket alert system
+* 🌐 Full web-first redesign (v3.1)
+* 🐳 Production-ready Docker setup
+
+---
+
+## 👨‍💻 Developer Notes
+
+* Backend is fully modular and service-oriented
+* ML models are hot-swappable per city
+* Web dashboards use CDN-based React (no build step)
+* Citizen app is lightweight and offline-tolerant
+* Designed for scalability + real-world deployment
+
+---
+
+## 📜 License
+
+This project is for academic and professional demonstration purposes.
+
+---
+
+## 🚀 Author
+
+**Zain Mohyuddin**
+HydroGuard AI System Architect & ML Developer
+
 ```
 
-Verify:
+---
 
-```bash
-chmod +x path/to/bundle/backend/smoke_test.sh
-path/to/bundle/backend/smoke_test.sh http://127.0.0.1:8000
+If you want, I can also:
+- add **GitHub badges (build, docker, python, license)**
+- create a **system architecture diagram (PNG/SVG)**
+- or convert this into a **portfolio-ready case study page**
 ```
-
-You should see 7 green checkmarks. If `/predict` fails, check the backend
-log — the smoke test sends a minimal valid payload, and any failure there
-usually means a schema mismatch in your `PredictionResponse`.
-
-### 2. Flutter app
-
-```bash
-cd frontend/weather_anomaly_app
-
-# Drop in all lib/ files, preserving paths.
-# Overwrite the 5 REPLACE files; create new directories for NEW files.
-
-# Clean up stale widgets (safe — script checks for imports first)
-chmod +x path/to/bundle/cleanup_old_widgets.sh
-path/to/bundle/cleanup_old_widgets.sh
-
-flutter clean
-flutter pub get
-flutter analyze           # expect 0 errors
-flutter run
-```
-
-### 3. HTML dashboard (optional — for preset UI parity)
-
-Merge `web_dashboard/settings_presets_patch.html` into
-`frontend/web_dashboard/admin_dashboard/index.html` as instructed in the
-comment header. Or skip it — the dashboard already works once the backend
-aliases are live.
-
-## Provider contract (verified against your real files)
-
-The new screens reference these members only. All exist on your providers:
-
-- **`LocationProvider`**: `initialize()`, `getCurrentLocation()`,
-  `setCity(String)` (sync void), `latitude`, `longitude`, `currentCity`,
-  `currentRegion`, `currentCountry`, `currentPosition`, `isLoading`, `error`,
-  `permissionGranted`, `clearError()`
-- **`WeatherProvider`**: `fetchWeatherAndAnalyze(...)`, `analyzeAnomaly()`,
-  `refresh(...)`, `fetchByCity(String, String)`, `loadAnomalyHistory()` (no
-  args), `checkApiHealth()`, `updateLocation(LocationProvider)`,
-  `testExtremeWeather()`, `setMockDataMode(bool)`, `clearErrors()`,
-  `currentWeather`, `currentAnomaly`, `anomalyHistory`, `weatherStatus`,
-  `anomalyStatus`, `weatherError`, `anomalyError`, `isApiHealthy`,
-  `isOffline`, `useMockData`, `isLoading`, `hasData`, `hasAnomaly`,
-  `lastUpdated`, `cacheTimestamp`, `cacheAgeDescription`
-- **`SettingsProvider`**: unchanged. Screen uses `apiUrl`, `setApiUrl`,
-  `notificationsEnabled`, `setNotificationsEnabled`, `autoRefresh`,
-  `setAutoRefresh`, `refreshInterval`, `resetToDefaults`.
-
-## Dependencies
-
-**Zero new packages required.** Every import in the new code
-(`fl_chart`, `geocoding`, `geolocator`, `google_fonts`, `hive_flutter`,
-`intl`, `provider`) is already declared in your `pubspec.yaml`.
-
-### One compatibility note
-
-The new widgets use `Color.withValues(alpha: ...)` — the non-deprecated
-API introduced in **Flutter 3.27 / Dart SDK ≥ 3.6**. Your pubspec allows
-any `sdk: '>=3.0.0 <4.0.0'`, so the actual behavior depends on which
-Flutter you have installed.
-
-Check with:
-
-```bash
-flutter --version
-```
-
-- **Flutter ≥ 3.27**: compiles cleanly.
-- **Flutter < 3.27**: you'll see ~14 errors like
-  `The method 'withValues' isn't defined for the type 'Color'`.
-  Fix with a one-shot sed:
-
-  ```bash
-  cd frontend/weather_anomaly_app
-  grep -rl "withValues" lib/ | \
-    xargs sed -i 's/\.withValues(alpha: \([^)]*\))/\.withOpacity(\1)/g'
-  ```
-
-## Backend endpoint mapping
-
-| Client calls                | Backend route       | Source             |
-|-----------------------------|---------------------|--------------------|
-| `GET /health`               | existed             | `system.py`        |
-| `GET /model/info`           | existed             | `system.py`        |
-| `POST /predict`             | existed             | `prediction.py`    |
-| `POST /predict/batch`       | existed             | `prediction.py`    |
-| `GET /anomalies?…`          | existed             | `anomalies.py`     |
-| `GET /anomalies/statistics` | existed             | `anomalies.py`     |
-| `GET /database/statistics`  | added by patch      | `analytics_aliases.py` |
-| `GET /analytics`            | added by patch      | `analytics_aliases.py` |
-
-The Flutter app only needs `/health`, `/predict`, `/anomalies`, and
-`/risk-map`. The two alias routes are purely for the HTML dashboard.
-
-## Demo-day checklist
-
-- **Localhost mode**: Flutter Settings → tap `Localhost` preset →
-  `Test /health`. Green OK means the whole stack is wired.
-- **LAN mode (phone demo)**: Edit `lib/screens/settings_screen.dart`
-  line ~31 — change `192.168.1.100:8000` to your laptop's actual LAN IP
-  (find with `ip a | grep inet` on Linux or `ipconfig` on Windows).
-  Or just type the real IP once into the custom input field — Hive
-  persists it across restarts.
-- **Deployed mode**: Edit the deployed preset URL on line ~32 to your
-  actual Render / Railway / ngrok URL.
-
-## Runtime URL switching
-
-Settings screen → pick a preset, or paste a custom URL, tap the ✓ icon →
-the SettingsProvider persists to Hive and immediately calls
-`AnomalyApiService.setBaseUrl(...)`. Next API call uses the new URL.
-No app restart required.
-
-## What's intentionally NOT done (per your non-negotiables)
-
-- No Riverpod / Bloc migration
-- No Flutter port of the HTML dashboard
-- No ML model retraining or schema changes
-- No new architectural layers (no GoRouter, no DI container, no
-  clean-architecture rewrite)
-- No visual changes to the HTML dashboard beyond the optional settings patch
-
-## Files you can safely delete after drop-in
-
-The `cleanup_old_widgets.sh` script handles this, but for reference:
-
-- `lib/widgets/hri_gauge.dart` — nothing imports it anymore
-- `lib/widgets/metric_card.dart` — replaced by `widgets/dashboard/metric_card.dart`
-- `lib/utils/app_theme.dart` — replaced by `core/theme/design_system.dart`
-
-The script only deletes these if no file outside the deleted set still
-imports them, so you can run it safely.
