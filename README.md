@@ -353,12 +353,4 @@ This project is for academic and professional demonstration purposes.
 **Zain Mohyuddin**
 HydroGuard AI System Architect & ML Developer
 
-```
 
----
-
-If you want, I can also:
-- add **GitHub badges (build, docker, python, license)**
-- create a **system architecture diagram (PNG/SVG)**
-- or convert this into a **portfolio-ready case study page**
-```
