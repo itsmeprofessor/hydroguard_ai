@@ -522,6 +522,7 @@ WEATHER_API_PROVIDER=open-meteo
 
 ### OpenWeatherMap
 
+<<<<<<< HEAD
 ```bash
 WEATHER_API_PROVIDER=openweathermap
 OPENWEATHER_API_KEY=your-free-key-from-openweathermap.org
@@ -802,3 +803,6 @@ Released for academic and demonstration purposes. See `LICENSE`.
 ---
 
 *HydroGuard-AI — Early warning saves lives.*
+=======
+
+>>>>>>> af86e3772d12dbe9d872a56e2ea7b503acef9d39
