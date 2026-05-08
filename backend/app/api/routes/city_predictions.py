@@ -28,10 +28,19 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import require_admin
+from app.core.limiter import limiter
+
+# Weather service import — optional; graceful fallback to climatology if unavailable
+try:
+    from app.services.weather_api import weather_service as _weather_service
+    _HAS_WEATHER_SERVICE = True
+except Exception:
+    _weather_service = None
+    _HAS_WEATHER_SERVICE = False
 from app.services.city_model_service import (
     CITY_METADATA,
     DEFAULT_METADATA,
@@ -112,23 +121,32 @@ def _risk_to_scenario(risk_level: str) -> str:
 
 
 # Hand-curated climatology for known cities — used only when no live weather
-# is provided to a predict / forecast endpoint. For unknown cities, a generic
-# default is returned.
+# is available. ALL pressure values are sea-level (MSL) pressure in hPa.
+# Training data uses MSL pressure (~1009 hPa mean). Surface pressure at high
+# altitude (Gilgit 1500m ≈ 850 hPa, Quetta 1700m ≈ 830 hPa) must NOT be used.
 _CLIMATOLOGY: Dict[str, Dict[str, float]] = {
     "islamabad":  dict(prcp=5,  humidity=60, pressure=1008, tmax=33, tmin=18, tavg=25, cloud_cover=40, dew_point=14, wspd=15),
     "rawalpindi": dict(prcp=5,  humidity=62, pressure=1007, tmax=34, tmin=19, tavg=26, cloud_cover=45, dew_point=15, wspd=14),
-    "lahore":     dict(prcp=3,  humidity=55, pressure=1010, tmax=37, tmin=22, tavg=29, cloud_cover=30, dew_point=12, wspd=12),
-    "karachi":    dict(prcp=2,  humidity=70, pressure=1012, tmax=34, tmin=26, tavg=30, cloud_cover=50, dew_point=22, wspd=18),
-    "peshawar":   dict(prcp=6,  humidity=58, pressure=999,  tmax=35, tmin=20, tavg=27, cloud_cover=35, dew_point=13, wspd=16),
-    "quetta":     dict(prcp=4,  humidity=45, pressure=985,  tmax=28, tmin=10, tavg=19, cloud_cover=25, dew_point=8,  wspd=20),
-    "faisalabad": dict(prcp=2,  humidity=52, pressure=1011, tmax=38, tmin=23, tavg=30, cloud_cover=28, dew_point=11, wspd=10),
-    "multan":     dict(prcp=1,  humidity=48, pressure=1012, tmax=40, tmin=24, tavg=32, cloud_cover=20, dew_point=10, wspd=11),
-    "hyderabad":  dict(prcp=2,  humidity=65, pressure=1013, tmax=36, tmin=25, tavg=30, cloud_cover=40, dew_point=20, wspd=15),
-    "gilgit":     dict(prcp=8,  humidity=52, pressure=875,  tmax=22, tmin=8,  tavg=15, cloud_cover=55, dew_point=6,  wspd=22),
+    "lahore":     dict(prcp=3,  humidity=55, pressure=1009, tmax=37, tmin=22, tavg=29, cloud_cover=30, dew_point=12, wspd=12),
+    "karachi":    dict(prcp=2,  humidity=70, pressure=1011, tmax=34, tmin=26, tavg=30, cloud_cover=50, dew_point=22, wspd=18),
+    "peshawar":   dict(prcp=6,  humidity=58, pressure=1008, tmax=35, tmin=20, tavg=27, cloud_cover=35, dew_point=13, wspd=16),
+    # Quetta: training pressure mean=1012.6, wspd mean=13.4
+    "quetta":     dict(prcp=4,  humidity=45, pressure=1013, tmax=28, tmin=10, tavg=19, cloud_cover=25, dew_point=8,  wspd=13),
+    "faisalabad": dict(prcp=2,  humidity=52, pressure=1010, tmax=38, tmin=23, tavg=30, cloud_cover=28, dew_point=11, wspd=10),
+    "multan":     dict(prcp=1,  humidity=48, pressure=1011, tmax=40, tmin=24, tavg=32, cloud_cover=20, dew_point=10, wspd=11),
+    "hyderabad":  dict(prcp=2,  humidity=65, pressure=1012, tmax=36, tmin=25, tavg=30, cloud_cover=40, dew_point=20, wspd=15),
+    # Gilgit: training pressure mean=1020.1 (higher than other cities), wspd mean=2.5 km/h (very low — mountain valley)
+    "gilgit":     dict(prcp=8,  humidity=52, pressure=1020, tmax=22, tmin=8,  tavg=15, cloud_cover=55, dew_point=6,  wspd=3),
+    "sialkot":    dict(prcp=4,  humidity=60, pressure=1009, tmax=35, tmin=20, tavg=27, cloud_cover=35, dew_point=14, wspd=12),
+    "gujranwala": dict(prcp=3,  humidity=57, pressure=1009, tmax=36, tmin=21, tavg=28, cloud_cover=32, dew_point=13, wspd=11),
+    "murree":     dict(prcp=12, humidity=72, pressure=1007, tmax=20, tmin=10, tavg=15, cloud_cover=65, dew_point=12, wspd=18),
+    "skardu":     dict(prcp=6,  humidity=48, pressure=1008, tmax=18, tmin=4,  tavg=11, cloud_cover=40, dew_point=4,  wspd=20),
+    "mirpur":     dict(prcp=7,  humidity=65, pressure=1007, tmax=30, tmin=18, tavg=24, cloud_cover=45, dew_point=16, wspd=14),
+    "muzaffarabad":dict(prcp=10,humidity=68, pressure=1007, tmax=28, tmin=15, tavg=21, cloud_cover=55, dew_point=16, wspd=16),
 }
 
 _GENERIC_CLIMATOLOGY: Dict[str, float] = dict(
-    prcp=4, humidity=58, pressure=1010, tmax=32, tmin=18,
+    prcp=4, humidity=58, pressure=1009, tmax=32, tmin=18,
     tavg=25, cloud_cover=40, dew_point=14, wspd=14,
 )
 
@@ -138,6 +156,39 @@ def _default_weather(slug: str) -> Dict[str, float]:
     For unknown cities, returns a generic mid-range default.
     """
     return _CLIMATOLOGY.get(slug, dict(_GENERIC_CLIMATOLOGY))
+
+
+async def _get_weather(slug: str) -> Dict[str, float]:
+    """
+    Fetch live weather for *slug*, merging real values onto climatology defaults.
+    Falls back to pure climatology if the weather service is unavailable or errors.
+    All pressure values coming from the service are already MSL (pressure_msl).
+    """
+    defaults = _default_weather(slug)
+    if not _HAS_WEATHER_SERVICE or _weather_service is None:
+        return defaults
+    try:
+        live = await _weather_service.get_current(slug)
+        if live and live.get("is_live"):
+            # Merge: live values override defaults.
+            # Keys intentionally NOT overridden:
+            #   tmin/tmax/temp_range — current-hour APIs return tmin=tmax=current_temp
+            #                          (daily range=0), wildly out-of-distribution for
+            #                          daily training data.
+            #   wspd               — instantaneous wind speed has huge variance vs the
+            #                        daily-mean winds in the training CSV. Gilgit's
+            #                        training wind std=0.5 km/h: even a 3 km/h gust
+            #                        becomes a 6σ outlier after StandardScaler.
+            _LIVE_KEYS = ("prcp", "humidity", "pressure", "cloud_cover", "dew_point")
+            for k in _LIVE_KEYS:
+                if k in live and live[k] is not None:
+                    defaults[k] = float(live[k])
+            # Update tavg from live temperature (sensible single-hour value)
+            if "tavg" in live and live["tavg"] is not None:
+                defaults["tavg"] = float(live["tavg"])
+    except Exception as exc:
+        logger.debug("Live weather fetch failed for %s (%s) — using climatology", slug, exc)
+    return defaults
 
 
 def _enrich_with_metadata(slug: str, base: Dict[str, Any]) -> Dict[str, Any]:
@@ -172,15 +223,21 @@ async def refresh_registry(_admin=Depends(require_admin)):
 
 @router.get("/overview", response_model=Dict[str, Any])
 async def cities_overview():
-    """Risk snapshot across every discovered city."""
+    """Risk snapshot across every discovered city using live weather where available."""
+    import asyncio
+
+    city_list = city_model_service.list_cities()
+
+    # Fetch live weather for all cities concurrently
+    weather_tasks = [_get_weather(c["slug"]) for c in city_list]
+    all_features  = await asyncio.gather(*weather_tasks, return_exceptions=True)
+
     results: List[Dict[str, Any]] = []
-    for city in city_model_service.list_cities():
+    for city, features in zip(city_list, all_features):
         slug = city["slug"]
-        defaults = _default_weather(slug)
-        pred = city_model_service.predict(
-            city=city["name"],
-            features=defaults,
-        )
+        if isinstance(features, Exception):
+            features = _default_weather(slug)
+        pred = city_model_service.predict(city=city["name"], features=features)
         results.append({
             "city":         city["name"],
             "city_slug":    slug,
@@ -191,7 +248,7 @@ async def cities_overview():
             "hri_score":    pred["hri_score"],
             "is_anomaly":   pred["is_anomaly"],
             "scenario":     _risk_to_scenario(pred["risk_level"]),
-            "rainfall_mh":  defaults.get("prcp", 0),
+            "rainfall_mh":  features.get("prcp", 0),
             "has_model":    city["has_model"],
             "source":       pred.get("source", "—"),
         })
@@ -207,16 +264,19 @@ async def cities_overview():
 
 @router.get("/{city}/risk", response_model=Dict[str, Any])
 async def city_risk(city: str):
-    """Current risk assessment for *city* using climatological defaults."""
+    """Current risk assessment for *city* — uses live weather when available,
+    falls back to climatological defaults. Pressure is always MSL."""
     slug = _validate_city(city)
-    defaults = _default_weather(slug)
-    pred = city_model_service.predict(city=_display_name(slug), features=defaults)
+    features = await _get_weather(slug)
+    pred = city_model_service.predict(city=_display_name(slug), features=features)
     pred["scenario"] = _risk_to_scenario(pred["risk_level"])
+    pred["inputs"]   = {k: features.get(k) for k in ("prcp", "humidity", "pressure", "tmax", "tmin")}
     return _enrich_with_metadata(slug, pred)
 
 
 @router.post("/{city}/predict", response_model=PredictionResponse)
-async def city_predict(city: str, body: WeatherInput):
+@limiter.limit("30/minute")
+async def city_predict(request: Request, city: str, body: WeatherInput):
     """Run city-specific hybrid model prediction with provided weather data."""
     slug = _validate_city(city)
     defaults = _default_weather(slug)
@@ -224,7 +284,19 @@ async def city_predict(city: str, body: WeatherInput):
         **defaults,
         **{k: v for k, v in body.model_dump().items() if v is not None},
     }
-    return city_model_service.predict(city=_display_name(slug), features=features)
+    result = city_model_service.predict(city=_display_name(slug), features=features)
+
+    # Record observation for drift monitoring (non-blocking)
+    try:
+        from app.ml.drift.monitor import get_drift_monitor
+        dm = get_drift_monitor()
+        if dm is not None:
+            import asyncio
+            asyncio.create_task(dm.record(slug, features))
+    except Exception:
+        pass
+
+    return result
 
 
 @router.get("/{city}/forecast", response_model=Dict[str, Any])

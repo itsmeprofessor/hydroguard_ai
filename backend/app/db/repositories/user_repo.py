@@ -40,6 +40,6 @@ class UserRepository:
         self.db.commit()
 
     def update_last_login(self, user: User) -> None:
-        from datetime import datetime
-        user.last_login = datetime.utcnow()
+        from datetime import datetime, timezone
+        user.last_login = datetime.now(timezone.utc)
         self.db.commit()

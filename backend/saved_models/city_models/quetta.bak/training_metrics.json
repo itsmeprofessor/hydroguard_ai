@@ -1,0 +1,18 @@
+{
+  "city_slug": "quetta",
+  "model_version": "quetta-v20260505-205022",
+  "git_commit": "16cf128",
+  "trained_at": "2026-05-05T20:50:22.107644+00:00",
+  "training_rows": 3214,
+  "val_rows": 402,
+  "cal_rows": 402,
+  "input_dim": 29,
+  "ae_val_loss": 0.26308608055114746,
+  "tcn_val_loss": 0.2791004776954651,
+  "lgbm_val_auc": 0.788,
+  "lgbm_val_brier": 0.0238,
+  "calibration_ece": 0.0,
+  "calibration_brier": 0.0213,
+  "duration_seconds": 150.9,
+  "positive_label_rate": 0.13681592039800994
+}

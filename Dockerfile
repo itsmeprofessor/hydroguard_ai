@@ -1,5 +1,5 @@
 # ============================================================
-#  HydroGuard-AI — Production Dockerfile
+#  HydroGuard-AI — Production Dockerfile v3.1
 #  Multi-stage build: deps layer cached separately from code.
 # ============================================================
 
@@ -20,10 +20,7 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # ── Stage 2: runtime image ───────────────────────────────────
 FROM python:3.11-slim AS runtime
 
-# curl for HEALTHCHECK
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-
+# No curl — healthcheck uses Python's built-in urllib (saves ~5 MB)
 WORKDIR /app
 
 # Copy installed Python packages from builder
@@ -32,6 +29,9 @@ COPY --from=builder /install /usr/local
 # Copy application source (no __pycache__, no .env)
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
+# Training scripts — invoked by the admin /cities/{city}/train endpoint
+# (see app/api/v2/cities.py::_run_training_background).
+COPY scripts/ ./scripts/
 
 # Runtime dirs (will be overlaid by volume mounts)
 RUN mkdir -p backend/data backend/saved_models backend/logs
@@ -42,19 +42,24 @@ RUN addgroup --system hydroguard \
     && chown -R hydroguard:hydroguard /app
 USER hydroguard
 
-# Environment defaults (override via docker-compose / -e flags)
+# Environment defaults (always override in production via .env or docker-compose)
+# PYTHONPATH includes /app so `from scripts.train_city import ...` resolves
+# regardless of the working directory.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
     API_HOST=0.0.0.0 \
     API_PORT=8000 \
     DEBUG=false \
-    CORS_ORIGINS=* \
-    ADMIN_TOKEN=changeme-set-in-env
+    CORS_ORIGINS=*
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD curl -sf http://localhost:8000/health || exit 1
+# Healthcheck using Python (no curl dependency)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request, sys; \
+        r = urllib.request.urlopen('http://localhost:8000/health', timeout=8); \
+        sys.exit(0 if r.status == 200 else 1)" || exit 1
 
 WORKDIR /app/backend
 CMD ["python", "run_server.py", "--host", "0.0.0.0", "--port", "8000"]

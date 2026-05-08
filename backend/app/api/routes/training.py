@@ -1,57 +1,36 @@
-"""Training routes — ADMIN only."""
+"""
+Training routes — DEPRECATED in v2.
+Redirects to /api/v2/training/{city}.
+"""
 
 from __future__ import annotations
 
 import logging
-import os
 
-from fastapi import APIRouter, Depends, HTTPException
-
-from app.api.deps import require_admin
-from app.core.config import DATA_DIR
-from app.db import TrainingRepository, get_db
-from app.schemas import TrainingRequest, TrainingResponse
-from app.services import anomaly_service
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/train", tags=["Training"])
+router = APIRouter(prefix="/train", tags=["Training (Deprecated)"])
+
+_DEPRECATION_NOTE = (
+    "This endpoint is deprecated. Use POST /api/v2/training/{city} instead. "
+    "Sunset date: 2026-08-01."
+)
 
 
-@router.post("", response_model=TrainingResponse)
-async def train_model(
-    request: TrainingRequest,
-    _admin = Depends(require_admin),
-):
-    data_path = request.data_path
-    if not data_path:
-        data_files = list(DATA_DIR.glob("*.csv"))
-        if data_files:
-            data_path = str(sorted(data_files)[0])
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="No training data found. Provide data_path or place a CSV in backend/data/.",
-            )
-
-    if not os.path.exists(data_path):
-        raise HTTPException(status_code=404, detail=f"Data file not found: {data_path}")
-
-    try:
-        result = anomaly_service.train(
-            data_path  = data_path,
-            use_lstm   = request.use_lstm,
-            epochs     = request.epochs,
-            batch_size = request.batch_size,
-            save_model = True,
-        )
-        with get_db() as db:
-            TrainingRepository(db).create(result["training_metadata"])
-
-        return TrainingResponse(
-            status            = result["status"],
-            message           = result["message"],
-            training_metadata = result["training_metadata"],
-        )
-    except Exception as e:
-        logger.error(f"Training failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Training failed: {e}")
+@router.post("")
+async def train_model(request: Request):
+    """DEPRECATED — redirects to v2 training endpoint."""
+    logger.warning("Deprecated /train endpoint called from %s", request.client)
+    return JSONResponse(
+        status_code=308,
+        content={
+            "detail":      _DEPRECATION_NOTE,
+            "redirect_to": "/api/v2/training/{city}",
+        },
+        headers={
+            "Location":    "/api/v2/training/all",
+            "Deprecation": 'version="v1"; sunset="2026-08-01"',
+        },
+    )

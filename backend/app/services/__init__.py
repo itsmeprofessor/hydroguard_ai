@@ -1,3 +1,6 @@
-from .anomaly_service import anomaly_service, AnomalyDetectionService, compute_hri
+"""
+HydroGuard-AI — Services Package
 
-__all__ = ["anomaly_service", "AnomalyDetectionService", "compute_hri"]
+anomaly_service was decommissioned in v3.2.
+All inference now routes through city_model_service.
+"""

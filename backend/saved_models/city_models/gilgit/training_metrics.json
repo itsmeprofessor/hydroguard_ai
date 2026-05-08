@@ -1,0 +1,18 @@
+{
+  "city_slug": "gilgit",
+  "model_version": "gilgit-v20260508-152219",
+  "git_commit": "16cf128",
+  "trained_at": "2026-05-08T15:22:19.627894+00:00",
+  "training_rows": 3506,
+  "val_rows": 438,
+  "cal_rows": 439,
+  "input_dim": 29,
+  "ae_val_loss": 0.173564150929451,
+  "tcn_val_loss": 0.20949538052082062,
+  "lgbm_val_auc": 0.8746,
+  "lgbm_val_brier": 0.1072,
+  "calibration_ece": 0.0,
+  "calibration_brier": 0.06668,
+  "duration_seconds": 124.6,
+  "positive_label_rate": 0.2528473804100228
+}

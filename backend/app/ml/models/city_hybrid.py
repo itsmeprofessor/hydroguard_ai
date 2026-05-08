@@ -1,412 +1,397 @@
 """
-HydroGuard-AI — City-Specific Hybrid Anomaly Model
-===================================================
+HydroGuard-AI -- City-Specific Hybrid Anomaly Model v3.2
+==========================================================
 Architecture per city:
-  Autoencoder  : Dense [64 → 32 → 16 → latent-8 → 16 → 32 → 64 → output]
-  LSTM+Attn    : LSTM(64, return_sequences=True) → BahdanauAttention(32)
-                 → LSTM(32) → Dense(16) → Dense(1, sigmoid)
-  Hybrid score : 0.55 × ae_score + 0.45 × lstm_score   (both normalised 0-1)
+  AE branch  : Dense [64->32->16->latent-8->16->32->64->out], Dropout 0.20
+                Trained on FAIR-WEATHER rows only (weak_label == 0).
+                Score: ECDFScaler(ae_error) -> ae_percentile in [0,1]
 
-Standardised output format (always returned by .predict()):
+  TCN branch : CausalTCN (dilations [1,2,4,8], seq_len=24, kernel=3, filters=64)
+                Trained as next-step MSE reconstructor on full training set.
+                Score: ECDFScaler(tcn_error) -> tcn_percentile in [0,1]
+
+  Hybrid     : Raw branch outputs fed to FusionModel (LightGBM) -> P(event)
+               Calibrated by IsotonicCalibrator -> event_probability
+
+  AE/TCN variance: sigmoid(z-score of error vs training distribution)
+                   Used for model_entropy and uncertainty computation.
+
+No BahdanauAttention -- removed in v3.2 (replaced by TCN).
+Strictly causal. No BiLSTM.
+
+Output from predict():
   {
-    "risk_level":    "Low" | "Medium" | "High",
-    "anomaly_score": float  0-1,
-    "confidence":    float  0-1,
-    "is_anomaly":    bool,
-    "ae_score":      float  (reconstruction error, normalised),
-    "lstm_score":    float  (sequential anomaly probability),
-    "hri_score":     int    0-100,
+    ae_percentile:  float [0,1]  -- ECDF rank of AE reconstruction error
+    tcn_percentile: float [0,1]  -- ECDF rank of TCN reconstruction error
+    ae_variance:    float [0,1]  -- model uncertainty on AE branch
+    tcn_variance:   float [0,1]  -- model uncertainty on TCN branch
+    ae_error_raw:   float        -- raw MSE (for debugging)
+    tcn_error_raw:  float        -- raw MSE (for debugging)
   }
-
-No BiLSTM — strictly causal (forward LSTM only).
+  FusionModel + IsotonicCalibrator (in CityModelService) add:
+    event_probability, confidence_interval, uncertainty, model_entropy,
+    risk_band, is_alert, drivers
 """
-
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
-from app.ml.models.attention import BahdanauAttention
+from app.ml.models.tcn import build_tcn_reconstructor, make_sequences, TCN_SEQ_LEN
+from app.ml.calibration.ecdf import ECDFScaler
 
 logger = logging.getLogger(__name__)
 
-# ──────────────────────────────────────────────────────────
-#  Hyper-parameters
-# ──────────────────────────────────────────────────────────
-
-AE_ENCODER_DIMS  = [64, 32, 16]
-AE_LATENT_DIM    = 8
-LSTM_UNITS_1     = 64
-LSTM_UNITS_2     = 32
-ATTN_UNITS       = 32
+# ----------------------------------------------------------------
+#  Autoencoder hyper-parameters (unchanged from v3.1)
+# ----------------------------------------------------------------
+AE_ENCODER_DIMS = [64, 32, 16]
+AE_LATENT_DIM   = 8
 DROPOUT_RATE     = 0.20
-AE_WEIGHT        = 0.55
-LSTM_WEIGHT      = 0.45
-SEQUENCE_LENGTH  = 7          # rolling window fed to the LSTM branch
+
+# Sequence length now driven by TCN (24 hourly steps)
+SEQUENCE_LENGTH  = TCN_SEQ_LEN   # 24
 
 
-# ──────────────────────────────────────────────────────────
-#  Autoencoder
-# ──────────────────────────────────────────────────────────
+# ----------------------------------------------------------------
+#  Autoencoder builder (unchanged)
+# ----------------------------------------------------------------
 
 def _build_autoencoder(input_dim: int) -> keras.Model:
-    """Dense autoencoder: encoder → latent → decoder."""
+    """Dense AE: encoder -> latent-8 -> decoder."""
     inp = keras.Input(shape=(input_dim,), name="ae_input")
-    x = inp
+    x   = inp
     for i, units in enumerate(AE_ENCODER_DIMS):
-        x = keras.layers.Dense(units, activation="relu",
-                                name=f"ae_enc_{i}")(x)
-        x = keras.layers.Dropout(DROPOUT_RATE, name=f"ae_enc_drop_{i}")(x)
-
-    latent = keras.layers.Dense(AE_LATENT_DIM, activation="relu",
-                                 name="ae_latent")(x)
-
-    x = latent
+        x = keras.layers.Dense(units, activation="relu",  name=f"ae_enc_{i}")(x)
+        x = keras.layers.Dropout(DROPOUT_RATE,            name=f"ae_enc_drop_{i}")(x)
+    latent = keras.layers.Dense(AE_LATENT_DIM, activation="relu", name="ae_latent")(x)
+    x      = latent
     for i, units in enumerate(reversed(AE_ENCODER_DIMS)):
-        x = keras.layers.Dense(units, activation="relu",
-                                name=f"ae_dec_{i}")(x)
-        x = keras.layers.Dropout(DROPOUT_RATE, name=f"ae_dec_drop_{i}")(x)
-
-    out = keras.layers.Dense(input_dim, activation="linear",
-                              name="ae_output")(x)
+        x = keras.layers.Dense(units, activation="relu",  name=f"ae_dec_{i}")(x)
+        x = keras.layers.Dropout(DROPOUT_RATE,            name=f"ae_dec_drop_{i}")(x)
+    out = keras.layers.Dense(input_dim, activation="linear", name="ae_output")(x)
     return keras.Model(inp, out, name="autoencoder")
 
 
-# ──────────────────────────────────────────────────────────
-#  LSTM + Attention anomaly detector
-# ──────────────────────────────────────────────────────────
-
-def _build_lstm_attention(input_dim: int) -> keras.Model:
-    """LSTM(64, return_seq) → Attention → LSTM(32) → Dense → anomaly prob."""
-    inp = keras.Input(shape=(SEQUENCE_LENGTH, input_dim), name="lstm_input")
-
-    # First LSTM — return full sequence for attention
-    lstm1_out = keras.layers.LSTM(
-        LSTM_UNITS_1, return_sequences=True,
-        dropout=DROPOUT_RATE, recurrent_dropout=0.1,
-        name="lstm_1",
-    )(inp)                                          # (batch, seq_len, 64)
-
-    # Last hidden state used as attention query
-    query = lstm1_out[:, -1, :]                     # (batch, 64)
-
-    # Bahdanau attention over the LSTM sequence
-    attn_layer = BahdanauAttention(units=ATTN_UNITS, name="attention")
-    context, _ = attn_layer(query, lstm1_out)       # context: (batch, 64)
-
-    # Concatenate context + last state → feed to second LSTM step
-    combined = keras.layers.Concatenate(name="concat_ctx")([context, query])
-    # Reshape to (batch, 1, 128) for second LSTM
-    combined = keras.layers.Reshape((1, LSTM_UNITS_1 * 2), name="reshape")(combined)
-
-    lstm2_out = keras.layers.LSTM(
-        LSTM_UNITS_2, return_sequences=False,
-        dropout=DROPOUT_RATE,
-        name="lstm_2",
-    )(combined)                                     # (batch, 32)
-
-    x = keras.layers.Dense(16, activation="relu",  name="dense_mid")(lstm2_out)
-    x = keras.layers.Dropout(DROPOUT_RATE, name="dense_drop")(x)
-    out = keras.layers.Dense(1, activation="sigmoid", name="anomaly_prob")(x)
-
-    return keras.Model(inp, out, name="lstm_attention_model")
-
-
-# ──────────────────────────────────────────────────────────
-#  Hybrid model wrapper
-# ──────────────────────────────────────────────────────────
+# ----------------------------------------------------------------
+#  CityHybridModel
+# ----------------------------------------------------------------
 
 class CityHybridModel:
     """
-    Manages the Autoencoder + LSTM+Attention pair for one city.
+    Manages the AE + TCN pair for one city.
 
     Training
     --------
-    model = CityHybridModel("islamabad", input_dim=18)
+    model = CityHybridModel("islamabad", input_dim=28)
     model.build()
-    ae_history, lstm_history = model.train(X_train, X_val, epochs=150)
+    ae_hist, tcn_hist = model.train(X_train, X_val, weak_labels=y_train)
     model.save(Path("saved_models/city_models/islamabad"))
 
     Inference
     ---------
-    result = model.predict(feature_vector, city_buffer)
-    # result: standardised dict (see module docstring)
+    raw = model.predict(feature_vector, sequence)
+    # raw: {ae_percentile, tcn_percentile, ae_variance, tcn_variance, ae_error_raw, tcn_error_raw}
+    # FusionModel + calibrator in CityModelService convert these to event_probability.
     """
 
-    RISK_THRESHOLDS = {
-        "Low":    (0.00, 0.40),
-        "Medium": (0.40, 0.65),
-        "High":   (0.65, 1.01),
-    }
+    AE_FILENAME    = "autoencoder.keras"
+    TCN_FILENAME   = "tcn_reconstructor.keras"
+    AE_ECDF_FILE   = "ae_ecdf.pkl"
+    TCN_ECDF_FILE  = "tcn_ecdf.pkl"
 
-    def __init__(self, city: str, input_dim: int):
-        self.city = city.strip().title()
+    def __init__(self, city: str, input_dim: int, seq_len: int = SEQUENCE_LENGTH):
+        self.city      = city.strip().title()
         self.input_dim = input_dim
-        self._ae:    Optional[keras.Model] = None
-        self._lstm:  Optional[keras.Model] = None
-        # Percentile stats from training set (for score normalisation)
-        self._ae_p99:   float = 1.0
-        self._ae_mean:  float = 0.0
-        self._ae_std:   float = 1.0
+        self.seq_len   = seq_len
 
-    # ──────────────────────────────────────────────────────
+        self._ae:  Optional[keras.Model] = None
+        self._tcn: Optional[keras.Model] = None
+
+        self._ae_ecdf:  ECDFScaler = ECDFScaler()
+        self._tcn_ecdf: ECDFScaler = ECDFScaler()
+
+        # Training distribution stats for variance calculation
+        self._ae_error_mu:   float = 0.0
+        self._ae_error_std:  float = 1.0
+        self._tcn_error_mu:  float = 0.0
+        self._tcn_error_std: float = 1.0
+
+    # --------------------------------------------------------
     #  Build
-    # ──────────────────────────────────────────────────────
+    # --------------------------------------------------------
 
     def build(self) -> "CityHybridModel":
-        self._ae   = _build_autoencoder(self.input_dim)
-        self._lstm = _build_lstm_attention(self.input_dim)
-        logger.info("[%s] Models built — AE params: %d, LSTM params: %d",
-                    self.city,
-                    self._ae.count_params(),
-                    self._lstm.count_params())
+        self._ae  = _build_autoencoder(self.input_dim)
+        self._tcn = build_tcn_reconstructor(self.input_dim)
+        logger.info(
+            "[%s] Models built -- AE params: %d, TCN params: %d",
+            self.city,
+            self._ae.count_params(),
+            self._tcn.count_params(),
+        )
         return self
 
-    # ──────────────────────────────────────────────────────
+    # --------------------------------------------------------
     #  Training
-    # ──────────────────────────────────────────────────────
+    # --------------------------------------------------------
 
     def train(
         self,
-        X_train: np.ndarray,
-        X_val:   np.ndarray,
-        epochs:     int = 150,
-        batch_size: int = 64,
-        patience:   int = 15,
-        ae_lr:      float = 1e-3,
-        lstm_lr:    float = 5e-4,
+        X_train:      np.ndarray,
+        X_val:        np.ndarray,
+        weak_labels:  Optional[np.ndarray] = None,  # 0=normal, 1=event, -1=abstain
+        epochs:       int   = 150,
+        batch_size:   int   = 64,
+        patience:     int   = 15,
+        ae_lr:        float = 1e-3,
+        tcn_lr:       float = 5e-4,
     ) -> Tuple[Any, Any]:
-        """Train AE first (reconstruction), then LSTM+Attention (anomaly labelling).
+        """
+        Phase 1: AE trained on FAIR-WEATHER rows only (weak_label == 0).
+                 If no labels provided, falls back to full X_train.
+        Phase 2: TCN trained on full X_train (next-step MSE).
 
         Parameters
         ----------
-        X_train : (N, input_dim)  — normalised feature matrix (normal-only records)
-        X_val   : (M, input_dim)  — validation split
-        Returns (ae_history, lstm_history)
+        X_train      : (N, input_dim) normalised feature matrix, time-ordered.
+        X_val        : (M, input_dim) validation split (chronologically after train).
+        weak_labels  : (N,) array of {-1, 0, 1}; 0 = fair-weather row for AE.
         """
-        if self._ae is None or self._lstm is None:
+        if self._ae is None or self._tcn is None:
             self.build()
 
-        # ── Phase 1: Autoencoder ──────────────────────────
-        self._ae.compile(
-            optimizer=keras.optimizers.Adam(ae_lr),
-            loss="mse",
-        )
+        # ---- Phase 1: Autoencoder on fair-weather rows ----
+        if weak_labels is not None and len(weak_labels) == len(X_train):
+            X_normal = X_train[weak_labels == 0]
+            if len(X_normal) < 50:
+                logger.warning(
+                    "[%s] Only %d fair-weather rows -- using full X_train for AE.",
+                    self.city, len(X_normal),
+                )
+                X_normal = X_train
+        else:
+            X_normal = X_train
+
+        logger.info("[%s] AE training on %d fair-weather rows", self.city, len(X_normal))
+        self._ae.compile(optimizer=keras.optimizers.Adam(ae_lr), loss="mse")
         cb_ae = [
-            keras.callbacks.EarlyStopping(monitor="val_loss", patience=patience,
-                                          restore_best_weights=True),
-            keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5,
-                                               patience=patience // 2, min_lr=1e-6),
+            keras.callbacks.EarlyStopping(
+                monitor="val_loss", patience=patience, restore_best_weights=True
+            ),
+            keras.callbacks.ReduceLROnPlateau(
+                monitor="val_loss", factor=0.5, patience=patience // 2, min_lr=1e-6
+            ),
         ]
         ae_hist = self._ae.fit(
-            X_train, X_train,
+            X_normal, X_normal,
             validation_data=(X_val, X_val),
             epochs=epochs, batch_size=batch_size,
             callbacks=cb_ae, verbose=0,
         )
-        logger.info("[%s] AE training done — best val_loss=%.5f",
-                    self.city, min(ae_hist.history["val_loss"]))
+        logger.info("[%s] AE done -- best val_loss=%.5f", self.city,
+                    min(ae_hist.history["val_loss"]))
 
-        # Calibrate AE score distribution
-        rec_errors = self._compute_ae_errors(X_train)
-        self._ae_mean = float(np.mean(rec_errors))
-        self._ae_std  = float(np.std(rec_errors))
-        self._ae_p99  = float(np.percentile(rec_errors, 99))
+        # Calibrate AE ECDF on training errors
+        ae_errs = self._compute_ae_errors(X_train)
+        self._ae_ecdf.fit(ae_errs)
+        self._ae_error_mu  = float(np.mean(ae_errs))
+        self._ae_error_std = max(float(np.std(ae_errs)), 1e-9)
 
-        # ── Phase 2: LSTM + Attention ─────────────────────
-        n_seq = len(X_train) - SEQUENCE_LENGTH
-        if n_seq < 100:
-            logger.warning("[%s] Not enough sequences (%d) for LSTM — skipped",
-                           self.city, n_seq)
+        # ---- Phase 2: TCN next-step reconstruction ----
+        X_seq_train, y_seq_train = make_sequences(X_train, self.seq_len)
+        X_seq_val,   y_seq_val   = make_sequences(X_val,   self.seq_len)
+
+        if len(X_seq_train) < 100:
+            logger.warning(
+                "[%s] Not enough sequences (%d) for TCN -- skipped.",
+                self.city, len(X_seq_train),
+            )
             return ae_hist, None
 
-        X_seq, y_seq = self._make_sequences(X_train)
-        X_val_seq, y_val_seq = self._make_sequences(X_val)
+        if len(X_seq_val) == 0:
+            logger.warning("[%s] Val set too small for TCN sequences -- skipped.", self.city)
+            return ae_hist, None
 
-        self._lstm.compile(
-            optimizer=keras.optimizers.Adam(lstm_lr),
-            loss="binary_crossentropy",
-            metrics=["accuracy"],
-        )
-        cb_lstm = [
-            keras.callbacks.EarlyStopping(monitor="val_loss", patience=patience,
-                                          restore_best_weights=True),
-            keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5,
-                                               patience=patience // 2, min_lr=1e-6),
+        self._tcn.compile(optimizer=keras.optimizers.Adam(tcn_lr), loss="mse")
+        cb_tcn = [
+            keras.callbacks.EarlyStopping(
+                monitor="val_loss", patience=patience, restore_best_weights=True
+            ),
+            keras.callbacks.ReduceLROnPlateau(
+                monitor="val_loss", factor=0.5, patience=patience // 2, min_lr=1e-6
+            ),
         ]
-        lstm_hist = self._lstm.fit(
-            X_seq, y_seq,
-            validation_data=(X_val_seq, y_val_seq),
+        tcn_hist = self._tcn.fit(
+            X_seq_train, y_seq_train,
+            validation_data=(X_seq_val, y_seq_val),
             epochs=epochs, batch_size=batch_size,
-            callbacks=cb_lstm, verbose=0,
+            callbacks=cb_tcn, verbose=0,
         )
-        logger.info("[%s] LSTM training done — best val_loss=%.5f",
-                    self.city, min(lstm_hist.history["val_loss"]))
+        logger.info("[%s] TCN done -- best val_loss=%.5f", self.city,
+                    min(tcn_hist.history["val_loss"]))
 
-        return ae_hist, lstm_hist
+        # Calibrate TCN ECDF
+        tcn_errs = self._compute_tcn_errors(X_seq_train, y_seq_train)
+        self._tcn_ecdf.fit(tcn_errs)
+        self._tcn_error_mu  = float(np.mean(tcn_errs))
+        self._tcn_error_std = max(float(np.std(tcn_errs)), 1e-9)
 
-    # ──────────────────────────────────────────────────────
+        return ae_hist, tcn_hist
+
+    # --------------------------------------------------------
     #  Inference
-    # ──────────────────────────────────────────────────────
+    # --------------------------------------------------------
 
     def predict(
         self,
-        x: np.ndarray,
-        sequence: Optional[np.ndarray] = None,
+        x:        np.ndarray,          # (input_dim,) current feature vector
+        sequence: Optional[np.ndarray] = None,  # (seq_len, input_dim) rolling window
     ) -> Dict[str, Any]:
-        """Standardised prediction.
+        """
+        Branch-level inference.  Returns raw percentile scores and variance
+        estimates.  The FusionModel + IsotonicCalibrator in CityModelService
+        produce the final event_probability and risk_band.
 
         Parameters
         ----------
-        x        : (input_dim,) — current feature vector (preprocessed)
-        sequence : (SEQUENCE_LENGTH, input_dim) — rolling window for LSTM,
-                   or None to use AE-only scoring
-
-        Returns
-        -------
-        dict with keys: risk_level, anomaly_score, confidence,
-                        is_anomaly, ae_score, lstm_score, hri_score
+        x        : (input_dim,) preprocessed feature vector for current step
+        sequence : (seq_len, input_dim) past seq_len vectors (NOT including x)
+                   -- same as v3.1 convention; x is the "next step" target.
+                   None -> TCN branch scores 0.0 (AE-only mode).
         """
         if self._ae is None:
             raise RuntimeError(f"Model for {self.city} not built/loaded.")
 
         x2d = x.reshape(1, -1)
 
-        # ── AE score ──────────────────────────────────────
-        rec   = self._ae(x2d, training=False).numpy()
-        ae_err = float(np.mean((x2d - rec) ** 2))
-        ae_norm = min(ae_err / max(self._ae_p99, 1e-9), 1.0)
+        # ---- AE branch ----
+        rec      = self._ae(x2d, training=False).numpy()
+        ae_error = float(np.mean((x2d - rec) ** 2))
+        ae_pct   = self._ae_ecdf.transform_scalar(ae_error)
 
-        # ── LSTM score ────────────────────────────────────
-        lstm_score = 0.0
-        if self._lstm is not None and sequence is not None:
-            seq3d = sequence.reshape(1, SEQUENCE_LENGTH, self.input_dim)
-            lstm_score = float(
-                self._lstm(seq3d, training=False).numpy()[0, 0]
-            )
+        # AE variance: sigmoid of z-score relative to training distribution
+        ae_z        = (ae_error - self._ae_error_mu) / max(self._ae_error_std, 1e-9)
+        ae_variance = float(1.0 / (1.0 + np.exp(-ae_z)))
 
-        # ── Hybrid score ──────────────────────────────────
-        weight_ae   = AE_WEIGHT if sequence is not None else 1.0
-        weight_lstm = LSTM_WEIGHT if sequence is not None else 0.0
-        hybrid = weight_ae * ae_norm + weight_lstm * lstm_score
-        hybrid = float(np.clip(hybrid, 0.0, 1.0))
+        # ---- TCN branch ----
+        tcn_pct      = 0.0
+        tcn_error    = 0.0
+        tcn_variance = 0.0
 
-        # ── Risk level ────────────────────────────────────
-        risk_level = "Low"
-        for label, (lo, hi) in self.RISK_THRESHOLDS.items():
-            if lo <= hybrid < hi:
-                risk_level = label
-                break
-
-        # ── Confidence ───────────────────────────────────
-        # Distance from boundary — further from 0.5 → higher confidence
-        confidence = float(min(abs(hybrid - 0.5) * 2.0, 1.0))
-
-        # ── HRI (0-100) ───────────────────────────────────
-        hri_score = int(round(hybrid * 100))
+        if self._tcn is not None and sequence is not None:
+            seq3d    = sequence.reshape(1, self.seq_len, self.input_dim)
+            pred     = self._tcn(seq3d, training=False).numpy()
+            tcn_error = float(np.mean((pred - x2d) ** 2))
+            tcn_pct   = self._tcn_ecdf.transform_scalar(tcn_error)
+            tcn_z     = (tcn_error - self._tcn_error_mu) / max(self._tcn_error_std, 1e-9)
+            tcn_variance = float(1.0 / (1.0 + np.exp(-tcn_z)))
 
         return {
-            "risk_level":    risk_level,
-            "anomaly_score": round(hybrid, 4),
-            "confidence":    round(confidence, 4),
-            "is_anomaly":    hybrid > 0.40,
-            "ae_score":      round(ae_norm, 4),
-            "lstm_score":    round(lstm_score, 4),
-            "hri_score":     hri_score,
+            "ae_percentile":  round(float(np.clip(ae_pct,  0.0, 1.0)), 4),
+            "tcn_percentile": round(float(np.clip(tcn_pct, 0.0, 1.0)), 4),
+            "ae_variance":    round(ae_variance,    4),
+            "tcn_variance":   round(tcn_variance,   4),
+            "ae_error_raw":   round(ae_error,  6),
+            "tcn_error_raw":  round(tcn_error, 6),
         }
 
-    # ──────────────────────────────────────────────────────
+    # --------------------------------------------------------
     #  Save / Load
-    # ──────────────────────────────────────────────────────
-
-    # File names — Keras 3 requires explicit .keras extension
-    AE_FILENAME   = "autoencoder.keras"
-    LSTM_FILENAME = "lstm_attention.keras"
-    CALIB_FILENAME = "ae_calibration.npy"
+    # --------------------------------------------------------
 
     def save(self, model_dir: Path) -> None:
-        """Save AE, LSTM, and calibration stats to *model_dir*."""
         model_dir = Path(model_dir)
         model_dir.mkdir(parents=True, exist_ok=True)
+
         self._ae.save(model_dir / self.AE_FILENAME)
-        if self._lstm is not None:
-            self._lstm.save(model_dir / self.LSTM_FILENAME)
-        np.save(model_dir / self.CALIB_FILENAME,
-                np.array([self._ae_mean, self._ae_std, self._ae_p99]))
-        logger.info("[%s] Model saved → %s", self.city, model_dir)
+        if self._tcn is not None:
+            self._tcn.save(model_dir / self.TCN_FILENAME)
+
+        self._ae_ecdf.save(model_dir / self.AE_ECDF_FILE)
+        self._tcn_ecdf.save(model_dir / self.TCN_ECDF_FILE)
+
+        # Legacy calibration file for backward compat reads
+        import numpy as _np
+        _np.save(
+            model_dir / "ae_calibration.npy",
+            _np.array([
+                self._ae_error_mu,  self._ae_error_std, self._ae_ecdf.training_p99,
+                self._tcn_error_mu, self._tcn_error_std, self._tcn_ecdf.training_p99,
+            ]),
+        )
+        logger.info("[%s] Model saved -> %s", self.city, model_dir)
 
     @classmethod
     def load(cls, city: str, model_dir: Path) -> "CityHybridModel":
-        """Load a previously saved city model.
-        Tolerates legacy SavedModel directory format if present.
-        """
         model_dir = Path(model_dir)
-        custom_objects = {"BahdanauAttention": BahdanauAttention}
 
+        # Load AE
         ae_path = model_dir / cls.AE_FILENAME
         if not ae_path.exists():
-            # Back-compat: try legacy SavedModel directory layout
-            legacy = model_dir / "autoencoder"
-            if legacy.exists():
-                ae_path = legacy
-            else:
-                raise FileNotFoundError(f"No AE model found in {model_dir}")
-
-        ae = keras.models.load_model(ae_path, custom_objects=custom_objects)
+            ae_path = model_dir / "autoencoder"   # legacy SavedModel dir
+            if not ae_path.exists():
+                raise FileNotFoundError(f"No AE model in {model_dir}")
+        ae        = keras.models.load_model(ae_path)
         input_dim = ae.input_shape[-1]
 
-        instance = cls(city=city, input_dim=input_dim)
+        instance     = cls(city=city, input_dim=input_dim)
         instance._ae = ae
 
-        lstm_path = model_dir / cls.LSTM_FILENAME
-        if not lstm_path.exists():
-            legacy_lstm = model_dir / "lstm_attention"
-            if legacy_lstm.exists():
-                lstm_path = legacy_lstm
-        if lstm_path.exists():
-            instance._lstm = keras.models.load_model(
-                lstm_path, custom_objects=custom_objects
-            )
+        # Load TCN (optional -- may be AE-only)
+        tcn_path = model_dir / cls.TCN_FILENAME
+        if not tcn_path.exists():
+            tcn_path = model_dir / "lstm_attention.keras"   # v3.1 legacy name
+        if tcn_path.exists():
+            instance._tcn = keras.models.load_model(tcn_path)
 
-        calib_path = model_dir / cls.CALIB_FILENAME
+        # Load ECDF scalers (preferred) or legacy calibration array
+        ae_ecdf_path  = model_dir / cls.AE_ECDF_FILE
+        tcn_ecdf_path = model_dir / cls.TCN_ECDF_FILE
+        if ae_ecdf_path.exists():
+            instance._ae_ecdf = ECDFScaler.load(ae_ecdf_path)
+        if tcn_ecdf_path.exists():
+            instance._tcn_ecdf = ECDFScaler.load(tcn_ecdf_path)
+
+        # Legacy fallback: read ae_calibration.npy for mu/std
+        calib_path = model_dir / "ae_calibration.npy"
         if calib_path.exists():
             arr = np.load(calib_path)
-            instance._ae_mean, instance._ae_std, instance._ae_p99 = (
-                float(arr[0]), float(arr[1]), float(arr[2])
-            )
+            if len(arr) >= 2:
+                instance._ae_error_mu,  instance._ae_error_std  = float(arr[0]), float(arr[1])
+            if len(arr) >= 5:
+                instance._tcn_error_mu, instance._tcn_error_std = float(arr[3]), float(arr[4])
 
         logger.info("[%s] Model loaded from %s", city, model_dir)
         return instance
 
-    # ──────────────────────────────────────────────────────
+    # --------------------------------------------------------
     #  Helpers
-    # ──────────────────────────────────────────────────────
+    # --------------------------------------------------------
 
     def _compute_ae_errors(self, X: np.ndarray) -> np.ndarray:
         rec = self._ae.predict(X, batch_size=256, verbose=0)
         return np.mean((X - rec) ** 2, axis=1)
 
-    def _make_sequences(
-        self, X: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Create overlapping windows (X_seq, y_seq).
-        y = 0 for all (training set is normal-only).
-        During fine-tuning with labelled anomalies, pass a y array directly.
-        """
-        n = len(X) - SEQUENCE_LENGTH
-        X_seq = np.stack([X[i : i + SEQUENCE_LENGTH] for i in range(n)])
-        y_seq = np.zeros(n, dtype=np.float32)
-        return X_seq, y_seq
+    def _compute_tcn_errors(
+        self, X_seq: np.ndarray, y_next: np.ndarray
+    ) -> np.ndarray:
+        pred = self._tcn.predict(X_seq, batch_size=256, verbose=0)
+        return np.mean((pred - y_next) ** 2, axis=1)
+
+    # --------------------------------------------------------
+    #  Properties
+    # --------------------------------------------------------
 
     @property
     def ae_threshold(self) -> float:
-        """Reconstruction error threshold (99th percentile on training set)."""
-        return self._ae_p99
+        """p99 training AE error (for backward compat)."""
+        return self._ae_ecdf.training_p99
 
     @property
     def is_built(self) -> bool:

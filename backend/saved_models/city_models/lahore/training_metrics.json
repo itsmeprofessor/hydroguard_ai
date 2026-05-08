@@ -1,0 +1,18 @@
+{
+  "city_slug": "lahore",
+  "model_version": "lahore-v20260508-153129",
+  "git_commit": "16cf128",
+  "trained_at": "2026-05-08T15:31:29.307240+00:00",
+  "training_rows": 2630,
+  "val_rows": 329,
+  "cal_rows": 329,
+  "input_dim": 29,
+  "ae_val_loss": 0.45216870307922363,
+  "tcn_val_loss": 0.46769949793815613,
+  "lgbm_val_auc": 0.8861,
+  "lgbm_val_brier": 0.0427,
+  "calibration_ece": 0.0,
+  "calibration_brier": 0.01633,
+  "duration_seconds": 99.7,
+  "positive_label_rate": 0.1762917933130699
+}

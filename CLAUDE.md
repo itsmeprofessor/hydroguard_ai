@@ -2,17 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Architecture version:** v3.2.0 (`app/main.py`). The sections below describe the
+> **current codebase** — not v3.1. Key changes since v3.1: BahdanauAttention → TCN;
+> simple score blending → LightGBM FusionModel + IsotonicCalibrator; fixed 10 cities →
+> dynamic city discovery; new v2 API at `/api/v2/*`; WeatherAPI live provider added.
+
 ## Project Overview
 
-HydroGuard-AI v3.1 is a production-grade flood / weather-anomaly detection system for Pakistan. It targets 10 cities (Islamabad, Rawalpindi, Lahore, Karachi, Peshawar, Quetta, Faisalabad, Multan, Hyderabad, Gilgit) and is **web-first** in v3.1 — all mobile dependencies have been removed.
+HydroGuard-AI v3.2 is a production-grade flood / weather-anomaly detection system for Pakistan. Cities are **dynamically discovered** from the dataset CSV and the saved-models directory (no fixed list). At least 6 cities have curated metadata: Islamabad, Rawalpindi, Lahore, Karachi, Peshawar, Quetta.
 
 System surface area:
 
-- **FastAPI backend** (`backend/`) — **city-specific hybrid ML** (Autoencoder + LSTM + **Bahdanau Attention**, one model per city), JWT auth with refresh-token rotation, WebSocket real-time push, SQLAlchemy persistence, slowapi rate limits. Falls back to a global heuristic when a city's model has not been trained yet.
-- **Public Citizen Web App** (`frontend/citizen_app/`) — minimal, friendly, **strictly follows the design from `frontend design for fyp/NewWebAPP.zip`**. Five screens (Home / Forecast / Alerts / Learn / Settings), live WebSocket-free polling every 5 minutes, light/dark mode, English + Urdu/Punjabi/Pashto/Sindhi/Balochi locale chooser. Connects to the backend via `/cities/*` endpoints.
-- **Admin Web Dashboard** (`frontend/web_dashboard/admin_dashboard/`) — JSX served via Babel-Standalone (no build step), JWT login, Pakistan SVG risk map, real-time WebSocket feed, **per-city model status / training trigger**, simplified screens.
+- **FastAPI backend** (`backend/`) — **city-specific hybrid ML** (Autoencoder + **TCN** + **LightGBM FusionModel** + **IsotonicCalibrator**, one model-set per city), JWT auth with refresh-token rotation, WebSocket real-time push, SQLAlchemy persistence, slowapi rate limits (applied on auth and city predict). Falls back to a rule-based heuristic when a city's model has not been trained yet.
+- **Public Citizen Web App** (`frontend/citizen_app/`) — minimal, friendly. Five screens (Home / Forecast / Alerts / Learn / Settings), live polling every 5 minutes, light/dark mode, English + Urdu/Punjabi/Pashto/Sindhi/Balochi locale chooser. Connects to the backend via `/api/v2/*` endpoints with `/cities/*` fallback.
+- **Admin Web Dashboard** (`frontend/web_dashboard/admin_dashboard/`) — JSX served via Babel-Standalone (no build step), JWT login, Pakistan SVG risk map, real-time WebSocket feed, **per-city model status / training trigger**.
 
-Backed in production by `docker-compose` (Postgres 16 + Redis 7 + API + nginx).
+Backed in production by `docker-compose` (Postgres 16 + Redis 7 + API + nginx **with HTTPS**).
 
 ## Commands
 
@@ -35,18 +40,20 @@ pytest tests/test_api.py::TestSystem::test_health -v
 
 # Lint + type-check (matches CI)
 ruff check backend/ --select E,W,F,I --ignore E501
-mypy backend/app/core/config.py backend/app/schemas/__init__.py --ignore-missing-imports
+mypy backend/app/core/config.py backend/app/core/security.py backend/app/schemas/__init__.py backend/app/db/database.py --ignore-missing-imports
 
 # Smoke test against running server
 ./backend/smoke_test.sh http://127.0.0.1:8000
 
-# Offline model training (legacy global model)
+# Legacy global model training (kept for backward compat; not used in v3.2 inference)
 python scripts/train.py --data backend/data/pakistan_weather_2000_2024.csv --use-lstm --epochs 200 --visualize
 
-# v3.1 — city-specific hybrid model training (Autoencoder + LSTM + Attention)
+# v3.2 — city-specific hybrid model training (Autoencoder + TCN + FusionModel)
+# Weak labels generated automatically from 95th-percentile heuristics if not present in CSV.
+# Requires AUC >= 0.70 on calibration set to save (use --force to override gate).
 python scripts/train_city.py --all --data backend/data/pakistan_weather_2000_2024.csv --epochs 150
 python scripts/train_city.py --city Islamabad --epochs 200
-python scripts/train_city.py --city Karachi  --no-lstm   # AE-only fallback
+python scripts/train_city.py --city Karachi  --no-tcn   # AE-only fallback
 
 # Docker (full stack: postgres + redis + api + nginx on :80)
 docker compose up --build

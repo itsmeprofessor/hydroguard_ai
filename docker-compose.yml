@@ -1,10 +1,21 @@
 # ============================================================
-#  HydroGuard-AI — Docker Compose v3.0
+#  HydroGuard-AI — Docker Compose v3.1
+#
+#  REQUIRED secrets (must be set in .env, no defaults):
+#    JWT_SECRET_KEY        — HS256 signing key (min 32 chars)
+#    ADMIN_TOKEN           — Legacy X-Admin-Token header
+#    POSTGRES_PASSWORD     — Database password
+#    REDIS_PASSWORD        — Redis auth password
+#
+#  Optional (have sane defaults):
+#    OPENWEATHER_API_KEY   — Live weather data (set for live mode)
+#    CORS_ORIGINS          — Comma-separated allowed origins
+#    ACCESS_TOKEN_EXPIRE_MINUTES  (default 30)
+#    REFRESH_TOKEN_EXPIRE_DAYS    (default 7)
+#
 #  Dev:  docker compose up
 #  Prod: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 # ============================================================
-
-version: "3.9"
 
 services:
 
@@ -14,34 +25,52 @@ services:
     container_name: hydroguard-db
     environment:
       POSTGRES_USER:     hydroguard
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword}
+      # :? syntax causes docker compose to FAIL if the variable is unset/empty
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB:       hydroguard
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./nginx/pg_backups:/backups      # pg_dump destination
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"            # Bind to localhost only
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hydroguard"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
 
   # ── Redis (rate limiting + WS connection state) ───────────
   redis:
     image: redis:7-alpine
     container_name: hydroguard-redis
-    command: redis-server --requirepass ${REDIS_PASSWORD:-redispass}
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"            # Bind to localhost only
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispass}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 192m
+          cpus: "0.5"
 
   # ── Main API ──────────────────────────────────────────────
   hydroguard-api:
@@ -54,20 +83,31 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - DEBUG=false
-      - DATABASE_URL=postgresql://hydroguard:${POSTGRES_PASSWORD:-strongpassword}@postgres:5432/hydroguard
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass}@redis:6379/0
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE-ME-in-production}
+      - DATABASE_URL=postgresql://hydroguard:${POSTGRES_PASSWORD}@postgres:5432/hydroguard
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-7}
-      - ADMIN_TOKEN=${ADMIN_TOKEN:-changeme-set-in-env}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080,http://localhost:5500}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:?ADMIN_TOKEN is required}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost,http://localhost:3000,http://localhost:8080,http://localhost:5500}
       - HYBRID_WARMUP=true
       - HYBRID_WARMUP_ROWS=14
-      - HYBRID_WARMUP_CSV=backend/data/pakistan_weather_2000_2024.csv
+      - HYBRID_WARMUP_CSV=/app/backend/data/pakistan_weather_2000_2024.csv
+      - WEATHERAPI_KEY=${WEATHERAPI_KEY:-}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY:-}
+      - WEATHER_API_PROVIDER=${WEATHER_API_PROVIDER:-auto}
+      - MPLCONFIGDIR=/tmp/matplotlib
     volumes:
       - ./backend/data:/app/backend/data
       - ./backend/saved_models:/app/backend/saved_models
       - ./backend/logs:/app/backend/logs
+      # Live-mount frontend — HTML/CSS/JS/JSX changes reflected immediately,
+      # no image rebuild needed.
+      - ./frontend:/app/frontend:ro
+      # Live-mount backend Python code — change .py files on host and restart
+      # the container to pick them up (no full rebuild needed).
+      - ./backend/app:/app/backend/app:ro
+      - ./backend/utils:/app/backend/utils:ro
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -77,11 +117,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2.0"
+        reservations:
+          memory: 512m
 
   # ── Nginx reverse proxy ───────────────────────────────────
   nginx:
@@ -95,7 +142,37 @@ services:
       - ./nginx/certs:/etc/nginx/certs:ro
       - ./frontend/web_dashboard/admin_dashboard:/usr/share/nginx/html:ro
     depends_on:
-      - hydroguard-api
+      hydroguard-api:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.5"
+
+  # ── Scheduled PostgreSQL Backup ───────────────────────────
+  backup:
+    image: postgres:16-alpine
+    container_name: hydroguard-backup
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./nginx/pg_backups:/backups
+    entrypoint: >
+      sh -c "
+        while true; do
+          FNAME=/backups/hydroguard_$$(date +%Y%m%d_%H%M%S).sql.gz;
+          pg_dump -h postgres -U hydroguard hydroguard | gzip > $$FNAME;
+          echo \"[backup] Saved $$FNAME\";
+          find /backups -name '*.sql.gz' -mtime +7 -delete;
+          echo \"[backup] Pruned backups older than 7 days\";
+          sleep 86400;
+        done
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

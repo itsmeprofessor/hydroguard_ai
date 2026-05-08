@@ -1,9 +1,10 @@
-"""AnomalyRepository — canonical implementation (moved from database.py)."""
+"""AnomalyRepository — canonical implementation."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ class AnomalyRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(
+    def _build_record(
         self,
         prediction_result: Dict[str, Any],
         weather_data: Dict[str, Any],
@@ -28,11 +29,11 @@ class AnomalyRepository:
                 else date_raw
             )
         except Exception:
-            parsed_date = datetime.utcnow()
+            parsed_date = datetime.now(timezone.utc)
 
         cb = prediction_result.get("cloudburst_risk", {}) or {}
 
-        record = AnomalyRecord(
+        return AnomalyRecord(
             city        = prediction_result.get("city"),
             region      = weather_data.get("region"),
             date        = parsed_date,
@@ -58,7 +59,24 @@ class AnomalyRepository:
             feature_contributions    = prediction_result.get("feature_contributions"),
             detailed_explanation     = prediction_result.get("detailed_explanation"),
         )
+
+    def add(
+        self,
+        prediction_result: Dict[str, Any],
+        weather_data: Dict[str, Any],
+    ) -> AnomalyRecord:
+        """Stage record for insert WITHOUT committing. Caller must commit."""
+        record = self._build_record(prediction_result, weather_data)
         self.db.add(record)
+        return record
+
+    def create(
+        self,
+        prediction_result: Dict[str, Any],
+        weather_data: Dict[str, Any],
+    ) -> AnomalyRecord:
+        """Stage + commit + refresh. Use for single-record inserts."""
+        record = self.add(prediction_result, weather_data)
         self.db.commit()
         self.db.refresh(record)
         return record

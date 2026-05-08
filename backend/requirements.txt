@@ -12,6 +12,7 @@ websockets>=12.0
 # ── Database ──────────────────────────────────────────────
 sqlalchemy>=2.0.0,<3.0.0
 alembic>=1.13.0
+psycopg2-binary>=2.9.9          # PostgreSQL driver (binary wheel, no system libs needed)
 
 # ── Auth & Security ───────────────────────────────────────
 bcrypt>=4.0.0
@@ -36,7 +37,16 @@ python-dotenv>=1.0.1
 # ── Testing ───────────────────────────────────────────────
 pytest>=8.0.0
 pytest-asyncio>=0.23.0
-httpx>=0.27.0
+
+# ── HTTP client ───────────────────────────────────────────
+httpx>=0.27.0,<1.0.0
+
+# ── Redis ─────────────────────────────────────────────────
+redis[hiredis]>=5.0.0,<6.0.0
+
+# ── ML additions (installed now, imported in later stages) ────
+lightgbm>=4.3.0,<5.0.0
+shap>=0.45.0,<1.0.0
 
 # ── Type hints ────────────────────────────────────────────
 typing-extensions>=4.11.0

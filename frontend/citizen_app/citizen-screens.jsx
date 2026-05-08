@@ -32,12 +32,39 @@ const SCENARIO_META = {
   },
 };
 
+/**
+ * Map a risk level string to a UI scenario.
+ * Accepts v1 (risk_level: Low/Medium/High/Critical) and
+ * v2 (risk_band: Low/Moderate/High/Severe) values.
+ */
 function riskToScenario(riskLevel) {
   if (!riskLevel) return "safe";
   const r = riskLevel.toLowerCase();
-  if (r === "high")   return "crit";
-  if (r === "medium") return "warn";
+  if (r === "high" || r === "critical" || r === "severe") return "crit";
+  if (r === "medium" || r === "moderate" || r === "elevated") return "warn";
   return "safe";
+}
+
+/**
+ * Normalise a v1 or v2 prediction response to a consistent shape used by all
+ * screens. v1 returns risk_level/anomaly_score/confidence/is_anomaly;
+ * v2 returns risk_band/event_probability/uncertainty/is_alert.
+ */
+function normRisk(d) {
+  if (!d) return d;
+  return {
+    ...d,
+    // canonical risk label — prefer v2 risk_band
+    risk_label:       d.risk_band      ?? d.risk_level      ?? "Low",
+    // probability 0‑1 — prefer v2 event_probability
+    prob:             d.event_probability ?? d.anomaly_score ?? null,
+    // alert flag — prefer v2 is_alert
+    alerting:         d.is_alert       ?? d.is_anomaly      ?? false,
+    // confidence 0‑1 — derive from v2 uncertainty or v1 confidence
+    conf: d.confidence != null
+      ? d.confidence
+      : (d.uncertainty != null ? Math.max(0, 1 - d.uncertainty) : null),
+  };
 }
 
 function scenarioPalette(scenario) {
@@ -132,28 +159,65 @@ const ADVICE = {
   ],
 };
 
+// ─── Live Weather Badge ───────────────────────────────────────────────────────
+const LiveBadge = ({ isLive }) => isLive ? (
+  <span style={{
+    display: "inline-flex", alignItems: "center", gap: 4,
+    fontSize: 10, fontWeight: 600, letterSpacing: "0.06em",
+    color: "#16A34A", background: "#DCFCE7",
+    border: "1px solid #BBF7D0", borderRadius: 20,
+    padding: "2px 8px",
+  }}>
+    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#16A34A",
+      boxShadow: "0 0 0 3px #BBF7D0", display: "inline-block" }}/>
+    LIVE
+  </span>
+) : null;
+
 // ─── HOME SCREEN ─────────────────────────────────────────────────────────────
 const HomeScreen = ({ riskData, forecast, loading, onTab, city }) => {
-  const scenario = riskToScenario(riskData?.risk_level);
+  const rd        = normRisk(riskData);
+  const scenario  = riskToScenario(rd?.risk_label);
   const meta      = SCENARIO_META[scenario];
   const pal       = scenarioPalette(scenario);
   const advice    = ADVICE[scenario];
-  const hri       = riskData?.hri_score ?? 0;
-  const prcp      = riskData?.inputs?.prcp ?? 0;
-  const pressure  = riskData?.inputs?.pressure ?? 1013;
+  const hri       = rd?.hri_score ?? 0;
+  // Live weather data is included in riskData when the /weather endpoint is used
+  const prcp      = rd?.prcp      ?? rd?.inputs?.prcp     ?? 0;
+  const pressure  = rd?.pressure  ?? rd?.inputs?.pressure ?? 1013;
+  const humidity  = rd?.humidity  ?? rd?.inputs?.humidity ?? 50;
+  const tmax      = rd?.tmax      ?? rd?.inputs?.tmax     ?? null;
+  const wspd      = rd?.wspd      ?? rd?.inputs?.wspd     ?? null;
+  const isLive    = rd?.is_live === true;
+  // v2 probability display (falls back to v1 confidence)
+  const confPct   = rd?.conf != null ? Math.round(rd.conf * 100) : null;
+  const probPct   = rd?.prob != null ? Math.round(rd.prob * 100) : null;
 
-  // Build hourly strip from forecast day 0 + mocked hours
-  const todayFc = forecast?.forecast?.[0];
-  const hourStrip = [
-    { t: "Now",  ic: prcp > 60 ? "rain" : prcp > 10 ? "rain" : "sun",  r: prcp },
-    { t: "+2h",  ic: "rain", r: Math.round(prcp * 1.1) },
-    { t: "+4h",  ic: "rain", r: Math.round(prcp * 0.9) },
-    { t: "+6h",  ic: "cloud", r: Math.round(prcp * 0.6) },
-    { t: "+8h",  ic: "cloud", r: Math.round(prcp * 0.3) },
-    { t: "+12h", ic: "sun",   r: 0 },
-    { t: "+18h", ic: "sun",   r: 0 },
-    { t: "+24h", ic: "cloud", r: Math.round(prcp * 0.2) },
-  ];
+  // Build hourly/daily strip from real forecast data when available.
+  // The backend provides daily resolution; we show the next 7 days labelled by
+  // day-name.  When forecast is unavailable, fall back to a placeholder strip
+  // based on today's current readings — clearly labelled as estimates.
+  const fcDays = forecast?.forecast ?? [];
+  const hourStrip = fcDays.length >= 2
+    ? fcDays.slice(0, 8).map((d, i) => {
+        const r = Math.round(d.daily_precip_mm ?? d.prcp ?? 0);
+        const label = i === 0 ? "Today" : (d.day_name?.slice(0, 3) ?? `+${i}d`);
+        return {
+          t:  label,
+          ic: r > 50 ? "rain" : r > 10 ? "rain" : r > 0 ? "cloud" : "sun",
+          r,
+        };
+      })
+    : [
+        { t: "Now",   ic: prcp > 50 ? "rain" : prcp > 10 ? "rain" : "sun",  r: prcp },
+        { t: "Est.",  ic: "cloud", r: Math.round(prcp * 0.9) },
+        { t: "Est.",  ic: "rain",  r: Math.round(prcp * 0.7) },
+        { t: "Est.",  ic: "cloud", r: Math.round(prcp * 0.5) },
+        { t: "Est.",  ic: "cloud", r: Math.round(prcp * 0.3) },
+        { t: "Est.",  ic: "sun",   r: 0 },
+        { t: "Est.",  ic: "sun",   r: 0 },
+        { t: "Est.",  ic: "cloud", r: Math.round(prcp * 0.2) },
+      ];
 
   return (
     <div className={`citizen-screen ${meta.bgClass}`}>
@@ -172,21 +236,29 @@ const HomeScreen = ({ riskData, forecast, loading, onTab, city }) => {
           </div>
         </div>
 
+        {/* Live badge */}
+        {!loading && <div style={{ marginBottom: 6 }}><LiveBadge isLive={isLive}/></div>}
+
         {/* Metrics row */}
         <div className="metrics-row">
           <div className="metric-tile">
             <div className="ic" style={{ background: pal.soft, color: pal.color }}><CIcon name="droplet" size={16}/></div>
-            {loading ? <Skeleton h={24} r={4}/> : <div className="v">{prcp.toFixed(0)}<small>mm/h</small></div>}
+            {loading ? <Skeleton h={24} r={4}/> : <div className="v">{Number(prcp).toFixed(0)}<small>mm</small></div>}
             <div className="l">Rainfall</div>
           </div>
           <div className="metric-tile">
             <div className="ic" style={{ background: "var(--c-blue-soft)", color: "var(--c-blue)" }}><CIcon name="therm" size={16}/></div>
-            {loading ? <Skeleton h={24} r={4}/> : <div className="v">{riskData?.inputs?.tmax ?? "—"}<small>°C</small></div>}
-            <div className="l">Temperature</div>
+            {loading ? <Skeleton h={24} r={4}/> : <div className="v">{tmax != null ? `${tmax}` : "—"}<small>°C</small></div>}
+            <div className="l">Temp</div>
+          </div>
+          <div className="metric-tile">
+            <div className="ic" style={{ background: "#EFF6FF", color: "#2563EB" }}><CIcon name="droplet" size={16}/></div>
+            {loading ? <Skeleton h={24} r={4}/> : <div className="v">{humidity}<small>%</small></div>}
+            <div className="l">Humidity</div>
           </div>
           <div className="metric-tile">
             <div className="ic" style={{ background: pal.soft, color: pal.color }}><CIcon name="shield" size={16}/></div>
-            {loading ? <Skeleton h={24} r={4}/> : <div className="v">{riskData?.risk_level ?? "—"}</div>}
+            {loading ? <Skeleton h={24} r={4}/> : <div className="v">{rd?.risk_label ?? "—"}</div>}
             <div className="l">Risk</div>
           </div>
         </div>
@@ -202,7 +274,10 @@ const HomeScreen = ({ riskData, forecast, loading, onTab, city }) => {
         <div className={`action-banner ${scenario === "crit" ? "" : "warn"}`}>
           <span className="pulse"/>
           <h4>{scenario === "crit" ? "ELEVATED FLOOD RISK" : "Heavy rain advisory"}</h4>
-          <p>Confidence: {Math.round((riskData?.confidence ?? 0.5) * 100)}% · HRI {hri}/100 · {city}</p>
+          <p>
+            {probPct != null ? `P(event) ${probPct}%` : confPct != null ? `Confidence ${confPct}%` : ""}
+            {" · HRI "}{hri}/100 · {city}
+          </p>
           <button onClick={() => onTab("alerts")}>View alerts <CIcon name="arrow" size={14}/></button>
         </div>
       )}
@@ -248,8 +323,17 @@ const HomeScreen = ({ riskData, forecast, loading, onTab, city }) => {
 
 // ─── FORECAST SCREEN ─────────────────────────────────────────────────────────
 const ForecastScreen = ({ forecast, riskData, loading, city }) => {
-  const scenario = riskToScenario(riskData?.risk_level);
-  const days = forecast?.forecast ?? [];
+  const rd       = normRisk(riskData);
+  const scenario = riskToScenario(rd?.risk_label);
+  // v2 forecast days use daily_precip_mm + event_probability; v1 uses prcp + risk_level
+  const rawDays  = forecast?.forecast ?? [];
+  const days = rawDays.map(d => ({
+    ...d,
+    prcp:       d.daily_precip_mm ?? d.prcp ?? 0,
+    risk_level: d.risk_band       ?? d.risk_level ?? "Low",
+    tmax:       d.max_temp_c      ?? d.tmax ?? null,
+    tmin:       d.min_temp_c      ?? d.tmin ?? null,
+  }));
 
   const dayIcon = (fc) => {
     if (fc.prcp > 60) return "rain";
@@ -276,11 +360,15 @@ const ForecastScreen = ({ forecast, riskData, loading, city }) => {
                   </div>
               }
             </div>
-            <span className={`pill-chip ${scenario}`}><span className="dt"/>{riskData?.risk_level ?? "—"} risk</span>
+            <span className={`pill-chip ${scenario}`}><span className="dt"/>{rd?.risk_label ?? "—"} risk</span>
           </div>
           {!loading && days.length > 0 && (
             <ForecastChart
-              data={days.map(d => ({ ...d, day_short: d.day_name?.slice(0, 3), prcp: d.prcp || 0 }))}
+              data={days.map(d => ({
+                ...d,
+                day_short: d.day_name?.slice(0, 3) ?? d.date?.slice(5),
+                prcp: d.prcp || 0,
+              }))}
               scenario={scenario}
             />
           )}
@@ -326,43 +414,74 @@ const ForecastScreen = ({ forecast, riskData, loading, city }) => {
 
 // ─── ALERTS SCREEN ───────────────────────────────────────────────────────────
 const AlertsScreen = ({ alerts, riskData, loading, city }) => {
-  const scenario = riskToScenario(riskData?.risk_level);
+  const rd       = normRisk(riskData);
+  const scenario = riskToScenario(rd?.risk_label);
+  const [filter, setFilter] = useState("all");  // "all" | "crit" | "warn" | "info"
 
-  // Build display alerts: real backend alerts + static city-level advisory
-  const liveAlerts = (alerts?.alerts ?? []).map(a => ({
-    kind:  riskToScenario(a.risk_level ?? "Low"),
-    t:     new Date(a.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    title: `${a.risk_level} anomaly detected`,
-    meta:  `HydroGuard · ${city} · score ${(a.score * 100).toFixed(0)}%`,
-    body:  `Rainfall anomaly score ${(a.score * 100).toFixed(0)}%. Exercise caution in low-lying areas.`,
-  }));
+  // Build live alerts from real backend response.
+  // v2 shape: { inference_id, risk_band, is_alert, event_probability, inferred_at, source }
+  // v1 shape: { id, risk_level, is_anomaly, anomaly_score, ts, score }
+  const liveAlerts = (alerts?.alerts ?? []).map(a => {
+    const riskLabel = a.risk_band ?? a.risk_level ?? "Low";
+    const probPct   = a.event_probability != null
+      ? Math.round(a.event_probability * 100)
+      : a.score != null ? Math.round(a.score * 100) : null;
+    const ts = a.inferred_at ?? a.ts;
+    return {
+      kind:  riskToScenario(riskLabel),
+      scope: "area",
+      t:     ts ? new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—",
+      title: `${riskLabel} flood event detected`,
+      meta:  `HydroGuard · ${city}${probPct != null ? ` · P(event) ${probPct}%` : ""}`,
+      body:  probPct != null
+        ? `Model event probability ${probPct}%. Exercise caution in low-lying areas.`
+        : `Anomaly detected. Exercise caution in low-lying areas.`,
+    };
+  });
 
+  // Contextual fallback alerts — only shown when the backend returns no live data.
   const staticAlerts = scenario === "crit" ? [
-    { kind: "crit", t: "Now",        title: "Elevated flood risk",          meta: `HydroGuard AI · ${city}`, body: "Model confidence high. Avoid areas prone to flash flooding." },
-    { kind: "warn", t: "Earlier",    title: "Heavy rain advisory",          meta: "PMD · Regional",          body: "Convective activity detected. Rainfall expected above seasonal average." },
-    { kind: "info", t: "Seasonal",   title: "Monsoon season active",        meta: "HydroGuard · seasonal",   body: "Review your emergency kit and update your family's evacuation plan." },
+    { kind: "crit", scope: "area",     t: "Now",      title: "Elevated flood risk",     meta: `HydroGuard AI · ${city}`, body: "Model confidence high. Avoid areas prone to flash flooding." },
+    { kind: "warn", scope: "national", t: "Earlier",  title: "Heavy rain advisory",     meta: "PMD · Regional",          body: "Convective activity detected. Rainfall expected above seasonal average." },
+    { kind: "info", scope: "national", t: "Seasonal", title: "Monsoon season active",   meta: "HydroGuard · seasonal",   body: "Review your emergency kit and update your family's evacuation plan." },
   ] : scenario === "warn" ? [
-    { kind: "warn", t: "Now",        title: "Heavy rain advisory",          meta: `HydroGuard AI · ${city}`, body: "Stay alert and avoid underpasses and nullah crossings." },
-    { kind: "info", t: "Seasonal",   title: "Monsoon season active",        meta: "HydroGuard · seasonal",   body: "Drainage capacity is near limit in some urban areas." },
+    { kind: "warn", scope: "area",     t: "Now",      title: "Heavy rain advisory",     meta: `HydroGuard AI · ${city}`, body: "Stay alert and avoid underpasses and nullah crossings." },
+    { kind: "info", scope: "national", t: "Seasonal", title: "Monsoon season active",   meta: "HydroGuard · seasonal",   body: "Drainage capacity is near limit in some urban areas." },
   ] : [
-    { kind: "info", t: "Today",      title: "All clear",                    meta: `HydroGuard AI · ${city}`, body: "No flood risk detected. Light showers possible this evening." },
-    { kind: "info", t: "Seasonal",   title: "Monsoon season watch",         meta: "HydroGuard · seasonal",   body: "Conditions can change rapidly. Keep HydroGuard notifications on." },
+    { kind: "info", scope: "area",     t: "Today",    title: "All clear",               meta: `HydroGuard AI · ${city}`, body: "No flood risk detected. Light showers possible this evening." },
+    { kind: "info", scope: "national", t: "Seasonal", title: "Monsoon season watch",    meta: "HydroGuard · seasonal",   body: "Conditions can change rapidly. Keep HydroGuard notifications on." },
   ];
 
-  const displayAlerts = [...liveAlerts, ...staticAlerts];
+  // Show live alerts if available; fall back to contextual static alerts.
+  const allDisplayAlerts = liveAlerts.length > 0 ? liveAlerts : staticAlerts;
+
+  // Apply filter
+  const filteredAlerts = filter === "all"
+    ? allDisplayAlerts
+    : filter === "area"
+    ? allDisplayAlerts.filter(a => a.scope === "area")
+    : allDisplayAlerts.filter(a => a.scope === "national");
+
+  const pillStyle = (id) => ({
+    cursor: "pointer",
+    background: filter === id ? "var(--c-text)" : undefined,
+    color:      filter === id ? "white" : undefined,
+  });
 
   return (
     <div className="citizen-screen scr-safe">
-      {/* Filter pills */}
+      {/* Filter pills — now functional */}
       <div style={{ display: "flex", gap: 8, paddingBottom: 14, overflowX: "auto" }}>
-        <span className="pill-chip" style={{ background: "var(--c-text)", color: "white" }}>All</span>
-        <span className="pill-chip">My area</span>
-        <span className="pill-chip">National</span>
+        <span className="pill-chip" style={pillStyle("all")}  onClick={() => setFilter("all")}>All</span>
+        <span className="pill-chip" style={pillStyle("area")} onClick={() => setFilter("area")}>My area</span>
+        <span className="pill-chip" style={pillStyle("national")} onClick={() => setFilter("national")}>National</span>
       </div>
 
       {loading
         ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} h={90} r={14} style={{ marginBottom: 10 }}/>)
-        : displayAlerts.map((a, i) => (
+        : filteredAlerts.length === 0
+        ? <p style={{ color: "var(--c-dim)", textAlign: "center", marginTop: 32 }}>No alerts for this filter.</p>
+        : filteredAlerts.map((a, i) => (
           <div key={i} className={`alert-item ${a.kind}`}>
             <div className="stripe"/>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -453,5 +572,5 @@ const LearnScreen = () => {
 // Export to window
 Object.assign(window, {
   HomeScreen, ForecastScreen, AlertsScreen, LearnScreen,
-  ForecastChart, RiskMeter, Skeleton, SCENARIO_META, riskToScenario,
+  ForecastChart, RiskMeter, Skeleton, SCENARIO_META, riskToScenario, normRisk,
 });

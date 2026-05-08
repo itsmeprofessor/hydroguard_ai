@@ -3,28 +3,37 @@ HydroGuard-AI — Central Configuration
 ======================================
 Single source of truth for all tunable parameters.
 Reads from environment / .env via python-dotenv.
+
+SECURITY: JWT_SECRET_KEY, ADMIN_TOKEN, DATABASE_URL passwords are REQUIRED at
+startup. The application will refuse to start with placeholder / default values.
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 # Load .env from project root (hydroguard_ai/)
-load_dotenv(Path(__file__).parents[2] / ".env")
+load_dotenv(Path(__file__).parents[3] / ".env")
 
 
 # ============================================================
 #  Paths
 # ============================================================
 
-BACKEND_DIR:  Path = Path(__file__).parents[1]          # .../backend/
+# config.py lives at: hydroguard_ai/backend/app/core/config.py
+# parents[0] = .../app/core/
+# parents[1] = .../app/
+# parents[2] = .../backend/   ← BACKEND_DIR
+# parents[3] = .../hydroguard_ai/
+BACKEND_DIR:  Path = Path(__file__).parents[2]          # .../backend/
 DATA_DIR:     Path = BACKEND_DIR / "data"
 MODELS_DIR:   Path = BACKEND_DIR / "saved_models"
 LOGS_DIR:     Path = BACKEND_DIR / "logs"
-STATIC_DIR:   Path = BACKEND_DIR.parent.parent / "frontend" / "web_dashboard" / "admin_dashboard"    # served as /static
+STATIC_DIR:   Path = BACKEND_DIR.parent / "frontend" / "web_dashboard" / "admin_dashboard"  # served as /static
 
 for _d in (DATA_DIR, MODELS_DIR, LOGS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
@@ -41,16 +50,89 @@ DATABASE_URL: str = os.getenv(
 
 
 # ============================================================
-#  Security
+#  Security — ALL values are REQUIRED in production
 # ============================================================
 
-ADMIN_TOKEN: str = os.getenv("ADMIN_TOKEN", "changeme-set-in-env")
+# Known insecure placeholder values that must not be deployed
+_INSECURE_JWT_PLACEHOLDERS = {
+    "CHANGE-ME-generate-with-secrets.token_hex(32)",
+    "changeme",
+    "secret",
+    "your-secret-key",
+    "",
+}
+
+_INSECURE_ADMIN_PLACEHOLDERS = {
+    "changeme-set-in-env",
+    "changeme",
+    "admin",
+    "password",
+    "",
+}
+
+ADMIN_TOKEN: str = os.getenv("ADMIN_TOKEN", "")
 
 # JWT
-JWT_SECRET_KEY:               str = os.getenv("JWT_SECRET_KEY", "CHANGE-ME-generate-with-secrets.token_hex(32)")
+JWT_SECRET_KEY:               str = os.getenv("JWT_SECRET_KEY", "")
 JWT_ALGORITHM:                str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES:  int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS:    int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS",   "7"))
+
+
+def validate_startup_secrets(strict: bool = True) -> list[str]:
+    """
+    Validate all required secrets are set and are not placeholder values.
+    Returns a list of error messages. If strict=True and errors exist, exits.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    # JWT_SECRET_KEY — hard requirement
+    if not JWT_SECRET_KEY:
+        errors.append(
+            "JWT_SECRET_KEY is not set. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    elif JWT_SECRET_KEY in _INSECURE_JWT_PLACEHOLDERS:
+        errors.append(
+            f"JWT_SECRET_KEY is a known placeholder value '{JWT_SECRET_KEY}'. "
+            "All JWTs are forgeable. Set a real secret before deploying."
+        )
+    elif len(JWT_SECRET_KEY) < 32:
+        warnings.append(
+            f"JWT_SECRET_KEY is only {len(JWT_SECRET_KEY)} chars. "
+            "Recommend ≥ 64 chars (32 bytes hex)."
+        )
+
+    # ADMIN_TOKEN — warn but don't block startup (legacy clients need it)
+    if not ADMIN_TOKEN or ADMIN_TOKEN in _INSECURE_ADMIN_PLACEHOLDERS:
+        warnings.append(
+            "ADMIN_TOKEN is unset or is a placeholder. "
+            "Legacy X-Admin-Token auth is effectively open."
+        )
+
+    import logging
+    logger = logging.getLogger("hydroguard.config")
+
+    for w in warnings:
+        logger.warning("⚠ CONFIG: %s", w)
+
+    if errors:
+        for e in errors:
+            logger.critical("✗ CONFIG FATAL: %s", e)
+        if strict:
+            # Security secrets are non-negotiable — exit regardless of DEBUG mode.
+            # For local dev, generate a key with:
+            #   python -c "import secrets; print(secrets.token_hex(32))"
+            # and add JWT_SECRET_KEY=<value> to your .env file.
+            sys.exit(
+                "\n[HydroGuard-AI] FATAL: Missing or insecure required secrets.\n"
+                + "\n".join(f"  • {e}" for e in errors)
+                + "\n\nQuick fix for local dev:\n"
+                + "  python -c \"import secrets; print('JWT_SECRET_KEY=' + secrets.token_hex(32))\" >> .env\n"
+            )
+
+    return errors
 
 
 # ============================================================
@@ -60,6 +142,22 @@ REFRESH_TOKEN_EXPIRE_DAYS:    int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS",  
 HYBRID_WARMUP_ENABLED:      bool = os.getenv("HYBRID_WARMUP", "true").lower() in ("true", "1", "yes")
 HYBRID_WARMUP_ROWS_PER_CITY: int = int(os.getenv("HYBRID_WARMUP_ROWS", "14"))
 HYBRID_WARMUP_CSV: str | None    = os.getenv("HYBRID_WARMUP_CSV")
+
+
+# ============================================================
+#  Weather API — WeatherAPI.com only (no fallback provider)
+# ============================================================
+
+WEATHERAPI_KEY:    str = os.getenv("WEATHERAPI_KEY", "")
+WEATHER_CACHE_TTL: int = int(os.getenv("WEATHER_CACHE_TTL_SECONDS", "600"))
+
+# Legacy keys kept for config file backward compat — not used in v2
+WEATHER_API_KEY:      str = os.getenv("OPENWEATHER_API_KEY", "")
+WEATHER_API_PROVIDER: str = os.getenv("WEATHER_API_PROVIDER", "weatherapi")
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+REDIS_URL:      str = os.getenv("REDIS_URL",      "redis://localhost:6379/0")
+REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
 
 
 # ============================================================
@@ -76,6 +174,29 @@ class APIConfig:
 
 
 # ============================================================
+#  Feature weights (module-level so class body can reference them)
+# ============================================================
+# Raw flood-focus weights; sum = 10.9
+_RAW_FEATURE_WEIGHTS: dict[str, float] = {
+    "prcp":        3.0,
+    "humidity":    2.0,
+    "pressure":    2.0,
+    "cloud_cover": 1.5,
+    "dew_point":   1.0,
+    "wspd":        1.0,
+    "tmin":        0.1,
+    "tmax":        0.1,
+    "tavg":        0.1,
+    "temp_range":  0.1,
+}
+_RAW_WEIGHT_SUM = sum(_RAW_FEATURE_WEIGHTS.values())   # 10.9
+# Normalised so they sum to exactly 1.0
+_NORMALISED_FEATURE_WEIGHTS: dict[str, float] = {
+    k: v / _RAW_WEIGHT_SUM for k, v in _RAW_FEATURE_WEIGHTS.items()
+}
+
+
+# ============================================================
 #  Model Hyperparameters
 # ============================================================
 
@@ -87,28 +208,17 @@ class ModelConfig:
     CONTEXT_FEATURES:   list[str] = ["tmin", "tmax", "tavg", "temp_range"]
     NUMERICAL_FEATURES: list[str] = PRIMARY_FEATURES + SECONDARY_FEATURES + CONTEXT_FEATURES
 
-    # Flood-focus weights applied before standard-scaling
-    FEATURE_WEIGHTS: dict[str, float] = {
-        "prcp":        3.0,
-        "humidity":    2.0,
-        "pressure":    2.0,
-        "cloud_cover": 1.5,
-        "dew_point":   1.0,
-        "wspd":        1.0,
-        "tmin":        0.1,
-        "tmax":        0.1,
-        "tavg":        0.1,
-        "temp_range":  0.1,
-    }
+    # References the module-level normalised dict (avoids class-scope lookup issue)
+    FEATURE_WEIGHTS: dict[str, float] = _NORMALISED_FEATURE_WEIGHTS
 
     CATEGORICAL_FEATURES: list[str] = ["season", "city", "region"]
     TEMPORAL_FEATURES:    list[str] = ["month", "day", "dayofweek", "is_weekend"]
 
-    ENCODING_DIM:   int   = 6
-    HIDDEN_LAYERS:  list  = [32, 16, 8]
+    ENCODING_DIM:   int   = 12      # Raised from 6 — less aggressive compression
+    HIDDEN_LAYERS:  list  = [64, 32, 16]  # Aligned with city_hybrid.py
     DROPOUT_RATE:   float = 0.2
 
-    LSTM_UNITS:      int = 32
+    LSTM_UNITS:      int = 64
     SEQUENCE_LENGTH: int = 7
 
     BATCH_SIZE:                int   = int(os.getenv("MODEL_BATCH_SIZE", "64"))
@@ -218,6 +328,22 @@ class CloudburstConfig:
 
 
 # ============================================================
+#  Drift Detection
+# ============================================================
+
+class DriftConfig:
+    """PSI-based feature drift configuration."""
+    # Features monitored for drift
+    MONITORED_FEATURES: list[str] = ["prcp", "humidity", "pressure", "cloud_cover"]
+    PSI_WARN_THRESHOLD:  float = 0.10   # log warning
+    PSI_CRIT_THRESHOLD:  float = 0.20   # trigger retraining recommendation
+    # Check drift every N predictions (per city)
+    CHECK_EVERY_N:       int   = 100
+    # Rolling window size for reference distribution
+    REFERENCE_WINDOW:    int   = 500
+
+
+# ============================================================
 #  Logging
 # ============================================================
 
@@ -227,6 +353,11 @@ LOGGING_CONFIG: dict = {
     "formatters": {
         "standard": {
             "format":  "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            "datefmt": "%Y-%m-%dT%H:%M:%S",
+        },
+        "json": {
+            "()": "logging.Formatter",
+            "fmt": '{"time":"%(asctime)s","level":"%(levelname)s","name":"%(name)s","msg":"%(message)s"}',
             "datefmt": "%Y-%m-%dT%H:%M:%S",
         },
     },

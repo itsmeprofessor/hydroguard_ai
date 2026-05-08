@@ -6,7 +6,6 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.core.config import DATA_DIR
 from sqlalchemy import func
 from app.db import AnomalyRepository,AnomalyRecord, get_db
 from app.schemas import (
@@ -14,8 +13,6 @@ from app.schemas import (
     AnomalyRecordResponse,
     StatisticsResponse,
 )
-from app.services import anomaly_service
-
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/anomalies", tags=["Anomalies"])
 
@@ -121,27 +118,6 @@ async def get_anomaly_statistics(
             # date range in DB
             dmin = db.query(func.min(AnomalyRecord.date)).scalar()
             dmax = db.query(func.max(AnomalyRecord.date)).scalar()
-
-        # DB-empty fallback: try CSV (only if model is trained)
-        if stats["total_records"] == 0 and anomaly_service.is_trained:
-            data_files = sorted(DATA_DIR.glob("*.csv"))
-            if data_files:
-                csv_stats = anomaly_service.get_anomaly_statistics(
-                    data_path  = str(data_files[0]),
-                    start_date = str(start_date) if start_date else None,
-                    end_date   = str(end_date)   if end_date   else None,
-                    city       = city,
-                )
-                return StatisticsResponse(
-                    total_records    = csv_stats.get("total_records"),
-                    anomaly_count    = csv_stats.get("total_anomalies"),
-                    anomaly_rate     = csv_stats.get("anomaly_percentage"),
-                    by_city          = csv_stats.get("anomalies_by_city"),
-                    by_risk_level    = csv_stats.get("risk_distribution"),
-                    by_month         = csv_stats.get("anomalies_by_month"),
-                    cloudburst_count = 0,
-                    date_range       = None,
-                )
 
         return StatisticsResponse(
             total_records    = stats["total_records"],

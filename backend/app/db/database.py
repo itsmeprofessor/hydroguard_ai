@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from sqlalchemy import (
@@ -68,8 +68,13 @@ class AnomalyRecord(Base):
     feature_contributions = Column(JSON, nullable=True)
     detailed_explanation  = Column(JSON, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    # v2 traceability fields — added in migration 001; nullable for legacy rows
+    inference_id  = Column(String(36), nullable=True)
+    model_version = Column(String(64), nullable=True)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -131,7 +136,7 @@ class TrainingRecord(Base):
 
     status        = Column(String(50), default="completed")
     error_message = Column(Text, nullable=True)
-    created_at    = Column(DateTime, default=datetime.utcnow)
+    created_at    = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 # ============================================================
@@ -140,8 +145,8 @@ class TrainingRecord(Base):
 
 def init_db() -> None:
     """Create all tables. Called from lifespan — never at import time."""
-    # Import auth model so its table is registered on Base.metadata
-    from app.auth.models import User  # noqa: F401
+    # Import from canonical location so users table is registered on Base.metadata
+    from app.db.models.user import User  # noqa: F401 — ensures users table registered
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialised.")
 
@@ -151,5 +156,8 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

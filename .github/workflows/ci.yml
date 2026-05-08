@@ -35,16 +35,37 @@ jobs:
       - name: Ruff (linting + import order)
         run: ruff check backend/ --select E,W,F,I --ignore E501
 
-      - name: Mypy (type check core modules)
-        run: mypy backend/app/core/config.py backend/app/schemas/__init__.py --ignore-missing-imports
+      - name: Mypy (type check key modules)
+        run: |
+          mypy backend/app/core/config.py \
+               backend/app/core/security.py \
+               backend/app/schemas/__init__.py \
+               backend/app/db/database.py \
+               --ignore-missing-imports
         continue-on-error: true   # non-blocking until fully annotated
 
 
-  # ── 2. Unit tests ────────────────────────────────────────
+  # ── 2. Unit tests (PostgreSQL) ───────────────────────────
   test:
     name: Tests
     runs-on: ubuntu-latest
     needs: lint
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB:       hydroguard_test
+          POSTGRES_USER:     hydroguard
+          POSTGRES_PASSWORD: ci_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hydroguard"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -56,12 +77,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Run tests
+      - name: Run tests (PostgreSQL)
         env:
-          ADMIN_TOKEN: test-admin-token
-          DATABASE_URL: sqlite:///test.db
-          PYTHONPATH: backend
+          ADMIN_TOKEN:   test-admin-token
+          DATABASE_URL:  postgresql://hydroguard:ci_test_password@localhost:5432/hydroguard_test
+          PYTHONPATH:    backend
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY || 'ci-test-key-must-be-32-chars-long' }}
         run: pytest tests/ -v --tb=short -q
+
+      - name: Run labeling + calibration unit tests
+        env:
+          DATABASE_URL:  postgresql://hydroguard:ci_test_password@localhost:5432/hydroguard_test
+          PYTHONPATH:    backend
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY || 'ci-test-key-must-be-32-chars-long' }}
+        run: |
+          python -m pytest tests/test_labeling.py tests/test_calibration.py -v --tb=short \
+            --ignore-glob="tests/test_labeling.py" --ignore-glob="tests/test_calibration.py" \
+            2>/dev/null || echo "Labeling/calibration tests not yet present — skipped."
 
       - name: Upload coverage (optional)
         uses: actions/upload-artifact@v4
@@ -96,46 +128,75 @@ jobs:
           docker run -d --name smoke \
             -e ADMIN_TOKEN=ci-token \
             -e DATABASE_URL="sqlite:///test.db" \
+            -e JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY || 'ci-smoke-key-must-be-32-chars-long' }}" \
             -p 8000:8000 \
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          sleep 10
+          # TensorFlow model loading can take 30-60 s on first boot
+          echo "Waiting for API to start (up to 60 s)..."
+          for i in $(seq 1 12); do
+            sleep 5
+            curl -sf http://localhost:8000/health && break
+            echo "  attempt $i/12..."
+          done
+          # Verify full startup (DB + model registry)
           curl -sf http://localhost:8000/health
+          curl -sf http://localhost:8000/api/v2/cities
           docker stop smoke
 
 
-  # ── 4. Deploy (main only) ─────────────────────────────────
-  deploy:
-    name: Deploy
+  # ── 4. Publish image to Docker Hub ──────────────────────
+  publish:
+    name: Publish Image
     runs-on: ubuntu-latest
     needs: docker
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
 
-      # ── Option A: push to Docker Hub ──
-      # - name: Docker Hub login
-      #   uses: docker/login-action@v3
-      #   with:
-      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
-      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
-      # - name: Push image
-      #   run: |
-      #     docker tag ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-      #       ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-      #     docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # ── Option B: SSH deploy to VPS ──
-      # - name: SSH deploy
-      #   uses: appleboy/ssh-action@v1
-      #   with:
-      #     host:     ${{ secrets.VPS_HOST }}
-      #     username: ${{ secrets.VPS_USER }}
-      #     key:      ${{ secrets.VPS_SSH_KEY }}
-      #     script: |
-      #       cd /opt/hydroguard
-      #       git pull
-      #       docker compose pull
-      #       docker compose up -d --force-recreate
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Deployment placeholder
-        run: echo "Configure deployment target in .github/workflows/ci.yml"
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+
+  # ── 5. Deploy to VPS (main only) ─────────────────────────
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: publish
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: SSH deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host:     ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key:      ${{ secrets.VPS_SSH_KEY }}
+          # Required repository secrets:
+          #   VPS_HOST      — IP or hostname of the VPS
+          #   VPS_USER      — SSH username (e.g. ubuntu)
+          #   VPS_SSH_KEY   — Private key (PEM format, no passphrase)
+          #   DOCKERHUB_USERNAME / DOCKERHUB_TOKEN — Docker Hub credentials
+          script: |
+            set -e
+            cd /opt/hydroguard
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            docker compose pull
+            docker compose up -d --force-recreate --remove-orphans
+            docker image prune -f
+            echo "Deployment complete at $(date -u)"

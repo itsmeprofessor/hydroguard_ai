@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 
 from app.core.dependencies import get_current_user
+from app.core.limiter import limiter
 from app.db.database import get_db
 from app.db.repositories.user_repo import UserRepository
 from .schemas import (
@@ -21,17 +22,20 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(req: RegisterRequest):
+@limiter.limit("5/minute")
+async def register(request: Request, req: RegisterRequest):
     return service.register(req)
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest):
+@limiter.limit("10/minute")
+async def login(request: Request, req: LoginRequest):
     return service.login(req)
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)
-async def refresh(req: RefreshRequest):
+@limiter.limit("20/minute")
+async def refresh(request: Request, req: RefreshRequest):
     return service.refresh_tokens(req)
 
 

@@ -265,14 +265,22 @@ const App = () => {
   // Fetch on mount + city change
   useEffect(() => {
     if (city !== lastCity) {
-      HydroAPI.clearCache();
+      // Cancel any in-flight requests for the previous city
+      if (lastCity) HydroAPI.cancelCity(lastCity);
+      HydroAPI.clearCityCache(city);
       fetchAll(city);
     }
   }, [city, fetchAll]);
 
-  // Auto-refresh every 5 minutes
+  // Auto-refresh every 5 minutes — deduplicate: only fire if no fetch in progress
   useEffect(() => {
-    const id = setInterval(() => fetchAll(city), 5 * 60 * 1000);
+    let inFlight = false;
+    const id = setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      HydroAPI.clearCityCache(city);
+      fetchAll(city).finally(() => { inFlight = false; });
+    }, 5 * 60 * 1000);
     return () => clearInterval(id);
   }, [city, fetchAll]);
 
@@ -287,11 +295,14 @@ const App = () => {
     showToast("Refreshing data…", "ok");
   };
 
+  // Normalise for v2 (risk_band) and v1 (risk_level) response shapes
+  const riskLabel = riskData?.risk_band ?? riskData?.risk_level ?? null;
   const hasAlert = (alerts?.count ?? 0) > 0
-    || (riskData?.risk_level && riskData.risk_level !== "Low");
+    || riskData?.is_alert === true
+    || (riskLabel && riskLabel !== "Low");
 
   const dark = theme === "dark";
-  const scenario = riskToScenario(riskData?.risk_level);
+  const scenario = riskToScenario(riskLabel);
 
   return (
     <div className={`hg-app ${dark ? "dark" : ""}`}>
@@ -317,19 +328,34 @@ const App = () => {
           </div>
 
           {/* Risk badge strip (only on home) */}
-          {tab === "home" && !loading && riskData && (
-            <div className={`risk-strip ${scenario}`}>
-              <span className="dot"/>
-              <span>{riskData.risk_level} risk</span>
-              <span className="sep">·</span>
-              <span>HRI {riskData.hri_score}/100</span>
-              <span className="sep">·</span>
-              <span>Confidence {Math.round((riskData.confidence ?? 0) * 100)}%</span>
-              {riskData.source === "heuristic" && (
-                <><span className="sep">·</span><span className="badge">Rule-based</span></>
-              )}
-            </div>
-          )}
+          {tab === "home" && !loading && riskData && (() => {
+            // Support both v2 (risk_band, event_probability, uncertainty) and
+            // v1 (risk_level, anomaly_score, confidence)
+            const label   = riskData.risk_band ?? riskData.risk_level ?? "—";
+            const probPct = riskData.event_probability != null
+              ? `P(event) ${Math.round(riskData.event_probability * 100)}%`
+              : riskData.confidence != null
+                ? `Conf ${Math.round(riskData.confidence * 100)}%`
+                : null;
+            return (
+              <div className={`risk-strip ${scenario}`}>
+                <span className="dot"/>
+                <span>{label} risk</span>
+                <span className="sep">·</span>
+                <span>HRI {riskData.hri_score ?? "—"}/100</span>
+                {probPct && <><span className="sep">·</span><span>{probPct}</span></>}
+                {riskData.is_live && (
+                  <><span className="sep">·</span><span className="badge" style={{ background: "#DCFCE7", color: "#16A34A" }}>Live</span></>
+                )}
+                {(riskData.source === "heuristic" || riskData.source === "heuristic_fallback") && (
+                  <><span className="sep">·</span><span className="badge">Rule-based</span></>
+                )}
+                {riskData.source === "ood_guard" && (
+                  <><span className="sep">·</span><span className="badge" style={{ background: "#FEF3C7", color: "#92400E" }}>OOD</span></>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── Screens ── */}
           {tab === "home" && (

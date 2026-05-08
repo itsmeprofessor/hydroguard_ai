@@ -151,13 +151,19 @@ class AnomalyListResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    status:        str
-    version:       str
-    model_loaded:  bool
-    model_type:    Optional[str]
-    timestamp:     str
-    model_version: Optional[int]       = None
-    ws_connections: Optional[Dict]     = None
+    status:         str
+    version:        str
+    model_loaded:   bool
+    model_type:     Optional[str]
+    timestamp:      str
+    model_version:  Optional[int]  = None
+    ws_connections: Optional[Dict] = None
+    # Extended fields (v3.1) — populated by system.py health_check()
+    drift:          Optional[Dict] = None
+    registry:       Optional[Dict] = None
+    city_models:    Optional[Dict] = None
+
+    model_config = {"extra": "allow"}
 
 
 class ModelInfoResponse(BaseModel):

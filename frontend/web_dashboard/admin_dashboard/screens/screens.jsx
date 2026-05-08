@@ -72,7 +72,7 @@ const DashboardScreen = ({ city, cities, liveEvents, onNav }) => {
   const highRisk  = overview?.high_risk   ?? 0;
   const medRisk   = overview?.medium_risk ?? 0;
   const lowRisk   = overview?.low_risk    ?? 0;
-  const total     = overview?.total       ?? CITIES.length;
+  const total     = overview?.total       ?? CITIES_FALLBACK.length;
   const entries   = overview?.overview    ?? [];
 
   return (
@@ -80,7 +80,7 @@ const DashboardScreen = ({ city, cities, liveEvents, onNav }) => {
       <div className="page-head">
         <div>
           <h1 className="page-title">Dashboard</h1>
-          <div className="page-sub">City-specific hybrid model · Autoencoder + LSTM + Attention</div>
+          <div className="page-sub">City-specific hybrid model · Autoencoder + TCN + LightGBM Fusion</div>
         </div>
         <div className="page-actions">
           <button className="btn" onClick={() => onNav("predict")}>

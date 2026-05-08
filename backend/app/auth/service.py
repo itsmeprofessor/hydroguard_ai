@@ -27,11 +27,13 @@ def register(req: RegisterRequest) -> TokenResponse:
         if repo.get_by_username(req.username):
             raise HTTPException(status_code=409, detail="Username already taken.")
 
+        # Security: role is ALWAYS "USER" for public registration.
+        # Promotion to ANALYST/ADMIN requires a privileged admin workflow.
         user = repo.create(
             email     = req.email,
             username  = req.username,
             hashed_pw = hash_password(req.password),
-            role      = req.role,
+            role      = "USER",
         )
 
         access   = create_access_token(user.id, user.role, user.username)

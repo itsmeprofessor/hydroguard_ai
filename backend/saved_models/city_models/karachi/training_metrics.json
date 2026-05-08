@@ -1,0 +1,18 @@
+{
+  "city_slug": "karachi",
+  "model_version": "karachi-v20260508-152949",
+  "git_commit": "16cf128",
+  "trained_at": "2026-05-08T15:29:49.525661+00:00",
+  "training_rows": 4675,
+  "val_rows": 584,
+  "cal_rows": 585,
+  "input_dim": 29,
+  "ae_val_loss": 0.41247498989105225,
+  "tcn_val_loss": 0.2312287539243698,
+  "lgbm_val_auc": 0.962,
+  "lgbm_val_brier": 0.0647,
+  "calibration_ece": 0.0,
+  "calibration_brier": 0.02325,
+  "duration_seconds": 228.9,
+  "positive_label_rate": 0.28376068376068375
+}

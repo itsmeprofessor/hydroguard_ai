@@ -22,17 +22,21 @@ Public surface:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock, RLock
 from typing import Any, Dict, List, Optional, Set
+from uuid import uuid4
 
 import numpy as np
 
 from app.core.config import DATA_DIR, MODELS_DIR
-from app.ml.models.city_hybrid import CityHybridModel, SEQUENCE_LENGTH
+from app.ml.models.city_hybrid import CityHybridModel
+from app.ml.models.tcn import TCN_SEQ_LEN
+SEQUENCE_LENGTH = TCN_SEQ_LEN  # 24 — keep backward-compat name
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +53,6 @@ CITY_METADATA: Dict[str, Dict[str, Any]] = {
     "karachi":    {"name": "Karachi",    "province": "Sindh",             "pop": "16M",   "lat": 24.8607, "lon": 67.0011, "vulnerability": 0.85},
     "peshawar":   {"name": "Peshawar",   "province": "KPK",               "pop": "1.9M",  "lat": 34.0151, "lon": 71.5249, "vulnerability": 0.82},
     "quetta":     {"name": "Quetta",     "province": "Balochistan",       "pop": "1.0M",  "lat": 30.1798, "lon": 66.9750, "vulnerability": 0.70},
-    "faisalabad": {"name": "Faisalabad", "province": "Punjab",            "pop": "3.2M",  "lat": 31.4504, "lon": 73.1350, "vulnerability": 0.65},
-    "multan":     {"name": "Multan",     "province": "Punjab",            "pop": "1.9M",  "lat": 30.1575, "lon": 71.5249, "vulnerability": 0.60},
-    "hyderabad":  {"name": "Hyderabad",  "province": "Sindh",             "pop": "1.7M",  "lat": 25.3792, "lon": 68.3683, "vulnerability": 0.72},
-    "gilgit":     {"name": "Gilgit",     "province": "Gilgit-Baltistan",  "pop": "0.2M",  "lat": 35.9208, "lon": 74.3086, "vulnerability": 0.90},
-    "sialkot":    {"name": "Sialkot",    "province": "Punjab",            "pop": "0.7M",  "lat": 32.4945, "lon": 74.5229, "vulnerability": 0.65},
-    "gujranwala": {"name": "Gujranwala", "province": "Punjab",            "pop": "2.0M",  "lat": 32.1877, "lon": 74.1945, "vulnerability": 0.62},
-    "murree":     {"name": "Murree",     "province": "Punjab",            "pop": "23K",   "lat": 33.9070, "lon": 73.3943, "vulnerability": 0.88},
-    "skardu":     {"name": "Skardu",     "province": "Gilgit-Baltistan",  "pop": "0.2M",  "lat": 35.2999, "lon": 75.6378, "vulnerability": 0.85},
-    "mirpur":     {"name": "Mirpur",     "province": "AJK",               "pop": "0.5M",  "lat": 33.1481, "lon": 73.7517, "vulnerability": 0.72},
-    "muzaffarabad":{"name":"Muzaffarabad","province":"AJK",               "pop": "0.7M",  "lat": 34.3700, "lon": 73.4711, "vulnerability": 0.85},
 }
 
 DEFAULT_METADATA: Dict[str, Any] = {
@@ -144,6 +138,11 @@ def _discover_trained_cities() -> Set[str]:
     """Scan saved_models/city_models/ for trained model directories.
     A directory counts as 'trained' if it contains either
     autoencoder.keras (Keras 3 format) or autoencoder/ (legacy SavedModel).
+
+    Skips backup / staging / hidden directories. The training pipeline writes
+    new models to ``<slug>.tmp`` and atomically renames the previous version
+    to ``<slug>.bak`` (see scripts/train_city.py); these must not show up as
+    separate cities in the registry.
     """
     if not CITY_MODELS_DIR.exists():
         return set()
@@ -151,8 +150,11 @@ def _discover_trained_cities() -> Set[str]:
     for p in CITY_MODELS_DIR.iterdir():
         if not p.is_dir():
             continue
+        name = p.name
+        if name.startswith(".") or name.endswith((".bak", ".tmp", ".old")):
+            continue
         if (p / "autoencoder.keras").exists() or (p / "autoencoder").exists():
-            out.add(p.name)
+            out.add(name)
     return out
 
 
@@ -169,13 +171,26 @@ class _CityBuffer:
         self._lock = Lock()
 
     def push_and_get(self, city_slug: str, vec: np.ndarray) -> Optional[np.ndarray]:
+        """
+        Return the last `seq_len` vectors BEFORE vec, then add vec to the buffer.
+
+        Training setup:  LSTM(X[t-7 : t]) → predicts X[t]
+        Inference setup: LSTM(sequence)    → compared against x (current vec)
+        So `sequence` must NOT include vec — it is the "past" context,
+        and vec is the "next step" target.
+        """
         if vec.ndim == 2:
             vec = vec[0]
         with self._lock:
-            self._bufs[city_slug].append(vec.astype(float))
             if len(self._bufs[city_slug]) < self._seq_len:
+                # Buffer not full yet — add vec and return None (no prediction)
+                self._bufs[city_slug].append(vec.astype(float))
                 return None
-            return np.stack(list(self._bufs[city_slug]))
+            # Return CURRENT buffer (past seq_len vectors, NOT including vec)
+            seq = np.stack(list(self._bufs[city_slug]))
+            # Now slide the window: append vec (drops oldest entry)
+            self._bufs[city_slug].append(vec.astype(float))
+            return seq
 
     def seed(self, city_slug: str, rows: np.ndarray) -> None:
         if rows is None or len(rows) == 0:
@@ -206,6 +221,9 @@ class CityModelService:
         self._buf = _CityBuffer()
         self._global_lock = Lock()
         self._alert_log: Dict[str, deque] = defaultdict(lambda: deque(maxlen=20))
+        self._fusion_models:     Dict[str, Any] = {}   # slug -> FusionModel
+        self._calibrators:       Dict[str, Any] = {}   # slug -> IsotonicCalibrator
+        self._ood_detectors:     Dict[str, Any] = {}   # slug -> OODDetector
         # Initial discovery
         self.refresh_registry()
 
@@ -291,25 +309,71 @@ class CityModelService:
         if not self._has_saved_model(slug):
             return None
         try:
-            return CityHybridModel.load(
+            model = CityHybridModel.load(
                 city=_display_name(slug),
                 model_dir=self._model_dir(slug),
             )
+            # Load v3.2 artifacts if available
+            self._load_v2_artifacts(slug)
+            return model
         except Exception as exc:
             logger.error("[%s] Failed to load city model: %s", slug, exc)
             return None
 
-    def _load_preprocessor(self, slug: str) -> Optional[Any]:
-        """Load the city-specific fitted preprocessor (joblib)."""
-        path = self._model_dir(slug) / "preprocessor.joblib"
-        if not path.exists():
-            return None
+    def _load_v2_artifacts(self, slug: str) -> None:
+        """Load FusionModel, IsotonicCalibrator, OODDetector for a city."""
+        model_dir = self._model_dir(slug)
+
         try:
-            import joblib
-            return joblib.load(path)
+            from app.ml.models.fusion import FusionModel
+            lgbm_path = model_dir / "lgbm_model.pkl"
+            if lgbm_path.exists():
+                self._fusion_models[slug] = FusionModel.load(lgbm_path)
+                logger.info("[%s] FusionModel loaded", slug)
         except Exception as exc:
-            logger.error("[%s] Failed to load preprocessor: %s", slug, exc)
-            return None
+            logger.debug("[%s] FusionModel load failed: %s", slug, exc)
+
+        try:
+            from app.ml.calibration.isotonic import IsotonicCalibrator
+            cal_path = model_dir / "calibrator.pkl"
+            if cal_path.exists():
+                self._calibrators[slug] = IsotonicCalibrator.load(cal_path)
+                logger.info("[%s] IsotonicCalibrator loaded", slug)
+        except Exception as exc:
+            logger.debug("[%s] IsotonicCalibrator load failed: %s", slug, exc)
+
+        try:
+            from app.ml.ood.detector import OODDetector
+            ood_path = model_dir / "ood_detector.pkl"
+            if ood_path.exists():
+                self._ood_detectors[slug] = OODDetector.load(ood_path)
+                logger.info("[%s] OODDetector loaded", slug)
+        except Exception as exc:
+            logger.debug("[%s] OODDetector load failed: %s", slug, exc)
+
+    def _load_preprocessor(self, slug: str) -> Optional[Any]:
+        """Load the city-specific fitted preprocessor.
+
+        Tries the v3.2 file (`preprocessor_v2.joblib`) first, then falls back
+        to the legacy `preprocessor.joblib` for older models.
+        """
+        model_dir = self._model_dir(slug)
+        v2_path = model_dir / "preprocessor_v2.joblib"
+        v1_path = model_dir / "preprocessor.joblib"
+
+        if v2_path.exists():
+            try:
+                from app.ml.preprocessing_v2 import WeatherDataPreprocessorV2
+                return WeatherDataPreprocessorV2.load(v2_path)
+            except Exception as exc:
+                logger.error("[%s] Failed to load preprocessor_v2: %s", slug, exc)
+        if v1_path.exists():
+            try:
+                import joblib
+                return joblib.load(v1_path)
+            except Exception as exc:
+                logger.error("[%s] Failed to load preprocessor (v1): %s", slug, exc)
+        return None
 
     def get_model(self, city: str) -> Optional[CityHybridModel]:
         slug = _slug(city)
@@ -328,14 +392,26 @@ class CityModelService:
                                        "predictions may fall back to heuristic", slug)
             return self._models.get(slug)
 
-    def register_model(self, slug: str, model: CityHybridModel,
-                       preprocessor: Any = None) -> None:
-        """Register a freshly trained model + preprocessor."""
+    def register_model(
+        self,
+        slug:         str,
+        model:        CityHybridModel,
+        preprocessor: Any = None,
+        fusion_model: Any = None,
+        calibrator:   Any = None,
+        ood_detector: Any = None,
+    ) -> None:
+        """Register a freshly trained model + all v3.2 artifacts."""
         with self._locks[slug]:
             self._models[slug] = model
             if preprocessor is not None:
                 self._preprocessors[slug] = preprocessor
-        # Refresh so the new model shows up in /cities
+            if fusion_model is not None:
+                self._fusion_models[slug] = fusion_model
+            if calibrator is not None:
+                self._calibrators[slug] = calibrator
+            if ood_detector is not None:
+                self._ood_detectors[slug] = ood_detector
         self.refresh_registry()
 
     # ──────────────────────────────────────────────────────
@@ -352,6 +428,7 @@ class CityModelService:
         If `preprocessor` is None, the city's saved preprocessor is used.
         """
         slug  = _slug(city)
+        logger.debug("[%s] predict() is deprecated in v3.2 -- use predict_v2()", slug)
         model = self.get_model(slug)
         # Use cached preprocessor if not explicitly passed
         if preprocessor is None:
@@ -368,10 +445,14 @@ class CityModelService:
             result["source"] = "heuristic"
         else:
             try:
-                x_vec = self._preprocess(features, preprocessor)
+                x_vec = self._preprocess(features, preprocessor, slug=slug)
                 sequence = self._buf.push_and_get(slug, x_vec)
                 pred = model.predict(x_vec, sequence)
-                result.update(pred)
+                # `pred` is v3.2-shaped (ae_percentile/tcn_percentile/...). The
+                # legacy predict() contract is the v3.1-shaped dict, so bridge
+                # the two so existing callers (routes/weather.py, the citizen
+                # app, /cities/overview) keep getting risk_level/hri_score/...
+                result.update(self._legacy_from_branches(slug, features, pred))
                 result["source"] = "city_model"
             except Exception as exc:
                 logger.error("[%s] Inference error: %s", slug, exc)
@@ -392,23 +473,472 @@ class CityModelService:
 
         return result
 
-    def _preprocess(self, features: Dict[str, Any], preprocessor) -> np.ndarray:
+    async def predict_v2(
+        self,
+        city_slug:  str,
+        raw_weather: Dict[str, Any],
+        request_id:  Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Full v2 inference pipeline returning PredictionResponseV2-compatible dict.
+
+        1. OOD check (if OODDetector available)
+        2. Feature engineering (FeaturePipelineV2)
+        3. Async AE + TCN scoring (asyncio.to_thread)
+        4. LightGBM fusion -> P(event)
+        5. Isotonic calibration + CI
+        6. SHAP explanation
+        7. Uncertainty computation (Addition A)
+        8. Risk band mapping
+        """
+        slug = _slug(city_slug)
+        model = self.get_model(slug)
+        now   = datetime.now(timezone.utc)
+
+        # ---- Feature engineering ----
+        try:
+            from app.ml.feature_pipeline import build_features, features_to_fusion_dict
+            from app.services.rolling_window import get_rolling_window
+            from app.services.climatology_store import climatology_store
+
+            ef = await build_features(
+                city_slug     = slug,
+                raw_weather   = raw_weather,
+                rolling_buffer= get_rolling_window(),
+                climatology   = climatology_store,
+                observed_at   = now,
+            )
+            feat_dict = ef.to_dict()
+        except Exception as exc:
+            logger.warning("[%s] FeaturePipeline failed: %s", slug, exc)
+            feat_dict = self._v2_feature_defaults(slug, raw_weather)
+
+        # ---- Match training-time feature distribution ────────────
+        # `scripts/train_city.py::_ensure_derived` injects constant defaults
+        # for any climatology / rolling-delta column missing in the CSV
+        # (climo_pct=1.0, climo_z=0.0, deltas=0.0). The training CSV does
+        # not carry these columns, so the OOD detector and the
+        # WeatherDataPreprocessorV2 were both fitted with zero variance on
+        # them. At inference, `build_features()` produces real values which
+        # collide with that near-singular training distribution and explode
+        # the Mahalanobis distance (~10^3 vs the trained ~3 threshold of ~8),
+        # tripping the OOD guard on every request.
+        #
+        # Until the OOD detector and preprocessor are retrained with the
+        # live feature pipeline, override these features back to their
+        # training-time constants. The model couldn't usefully learn from
+        # them anyway (zero variance), so this is information-preserving.
+        for _k in (
+            "prcp_climo_pct", "humidity_climo_pct",      # default 1.0
+        ):
+            feat_dict[_k] = 1.0
+        for _k in (
+            "pressure_climo_z",
+            "pressure_delta_3h", "pressure_delta_6h",
+            "humidity_delta_3h", "rain_rate_1h",
+            "rain_accumulation_3h", "rain_accumulation_6h",
+            "cloud_jump_3h",
+        ):
+            feat_dict[_k] = 0.0
+
+        # ---- OOD check ----
+        ood_detector = self._ood_detectors.get(slug)
+        if ood_detector is not None:
+            try:
+                from app.ml.ood.detector import OOD_FEATURES
+                ood_vec  = ood_detector.extract_features(feat_dict)
+                distance = ood_detector.mahalanobis_distance(ood_vec)
+                if ood_detector.is_ood(ood_vec):
+                    logger.info("[%s] OOD detected: distance=%.3f", slug, distance)
+                    return ood_detector.ood_response(slug, distance)
+            except Exception as exc:
+                logger.debug("[%s] OOD check failed: %s", slug, exc)
+
+        # ---- Model not available -- heuristic ----
+        if model is None:
+            h    = self._heuristic_predict(slug, raw_weather)
+            risk = h.get("risk_level", "Low")
+            band_map  = {"Low": "Low", "Medium": "Moderate", "High": "High"}
+            risk_band = band_map.get(risk, "Moderate")
+            p_event   = float(h.get("anomaly_score", 0.3))
+            return {
+                "inference_id":        str(uuid4()),
+                "city":                _display_name(slug),
+                "city_slug":           slug,
+                "inferred_at":         now.isoformat(),
+                "model_version":       "heuristic",
+                "calibration_version": "none",
+                "source":              "heuristic",
+                "event_probability":   round(p_event, 4),
+                "confidence_interval": [
+                    round(max(0.0, p_event - 0.15), 4),
+                    round(min(1.0, p_event + 0.15), 4),
+                ],
+                "uncertainty":         0.30,
+                "model_entropy":       None,
+                "risk_band":           risk_band,
+                "is_alert":            p_event > 0.40,
+                "component_scores":    None,
+                "drivers":             None,
+                "weather_inputs":      {
+                    k: raw_weather.get(k)
+                    for k in ["prcp","humidity","pressure","cloud_cover","tmax","tmin"]
+                },
+                "climatology_context": None,
+            }
+
+        # ---- Preprocess ----
+        preprocessor = self._preprocessors.get(slug)
+        try:
+            x_vec = self._preprocess(feat_dict, preprocessor, slug=slug)
+        except Exception as exc:
+            logger.error("[%s] Preprocess failed: %s", slug, exc)
+            result = self._heuristic_predict(slug, raw_weather)
+            result["inference_id"] = str(uuid4())
+            result["inferred_at"]  = now.isoformat()
+            return result
+
+        # ---- Rolling window for TCN ----
+        sequence = self._buf.push_and_get(slug, x_vec)
+
+        # ---- AE + TCN branch scoring (async) ----
+        try:
+            raw_scores = await asyncio.to_thread(model.predict, x_vec, sequence)
+        except Exception as exc:
+            logger.error("[%s] Branch inference failed: %s", slug, exc)
+            raw_scores = {
+                "ae_percentile": 0.0, "tcn_percentile": 0.0,
+                "ae_variance": 0.5,   "tcn_variance": 0.5,
+                "ae_error_raw": 0.0,  "tcn_error_raw": 0.0,
+            }
+
+        ae_pct  = raw_scores["ae_percentile"]
+        tcn_pct = raw_scores["tcn_percentile"]
+        ae_var  = raw_scores["ae_variance"]
+        tcn_var = raw_scores["tcn_variance"]
+
+        # ---- Fusion (LightGBM) ----
+        fusion = self._fusion_models.get(slug)
+        p_raw  = (ae_pct * 0.55 + tcn_pct * 0.45)  # fallback if no fusion model
+        if fusion is not None and fusion.is_fitted:
+            try:
+                from app.ml.models.fusion import FUSION_FEATURES
+                fusion_input = {f: float(feat_dict.get(f, 0.0) or 0.0) for f in FUSION_FEATURES
+                                if f not in ("ae_percentile","tcn_percentile","ae_variance","tcn_variance")}
+                fusion_input.update({"ae_percentile": ae_pct, "tcn_percentile": tcn_pct,
+                                     "ae_variance": ae_var, "tcn_variance": tcn_var})
+                p_raw = await asyncio.to_thread(fusion.predict_scalar, fusion_input)
+            except Exception as exc:
+                logger.debug("[%s] Fusion model failed: %s", slug, exc)
+
+        # ---- Calibration ----
+        calibrator = self._calibrators.get(slug)
+        p_calib    = p_raw
+        ci_lo, ci_hi = (max(0.0, p_raw - 0.15), min(1.0, p_raw + 0.15))
+        uncertainty  = abs(ci_hi - ci_lo)
+        model_entropy_val = None
+
+        if calibrator is not None:
+            try:
+                p_calib = float(calibrator.transform(p_raw))
+                ci_lo, ci_hi = calibrator.confidence_interval(p_calib)
+                uncertainty  = calibrator.compute_uncertainty(p_calib, ae_var, tcn_var)
+                model_entropy_val = calibrator.model_entropy(p_calib)
+            except Exception as exc:
+                logger.debug("[%s] Calibration failed: %s", slug, exc)
+
+        # ---- SHAP ----
+        drivers = None
+        if fusion is not None and fusion.is_fitted:
+            try:
+                shap_dict = await asyncio.to_thread(
+                    fusion.shap_values, {**feat_dict,
+                                         "ae_percentile": ae_pct, "tcn_percentile": tcn_pct,
+                                         "ae_variance": ae_var, "tcn_variance": tcn_var}
+                )
+                if shap_dict:
+                    drivers = [{"feature": k, "shap": v, "value": float(feat_dict.get(k, 0.0) or 0.0)}
+                               for k, v in shap_dict.items()]
+            except Exception as exc:
+                logger.debug("[%s] SHAP failed: %s", slug, exc)
+
+        # ---- Risk band ----
+        if p_calib < 0.25:   risk_band = "Low"
+        elif p_calib < 0.50: risk_band = "Moderate"
+        elif p_calib < 0.75: risk_band = "High"
+        else:                 risk_band = "Severe"
+        is_alert = p_calib >= 0.50
+
+        # ---- Alert log (reuse existing mechanism) ----
+        if is_alert:
+            self._alert_log[slug].append({
+                "ts":         now.isoformat(),
+                "risk_band":  risk_band,
+                "p_event":    round(p_calib, 4),
+            })
+
+        return {
+            "inference_id":        str(uuid4()),
+            "city":                _display_name(slug),
+            "city_slug":           slug,
+            "inferred_at":         now.isoformat(),
+            "model_version":       getattr(model, 'city', slug) + "-v3.2",
+            "calibration_version": "isotonic-v1" if calibrator else "none",
+            "source":              "city_model",
+            "event_probability":   round(p_calib, 4),
+            "confidence_interval": [round(ci_lo, 4), round(ci_hi, 4)],
+            "uncertainty":         round(uncertainty, 4),
+            "model_entropy":       round(model_entropy_val, 4) if model_entropy_val else None,
+            "risk_band":           risk_band,
+            "is_alert":            is_alert,
+            "component_scores":    {
+                "ae_percentile":  round(ae_pct,  4),
+                "tcn_percentile": round(tcn_pct, 4),
+                "p_event_raw":    round(p_raw,   4),
+                "ae_variance":    round(ae_var,  4),
+                "tcn_variance":   round(tcn_var, 4),
+            },
+            "drivers":             drivers,
+            "weather_inputs":      {
+                k: raw_weather.get(k) for k in ["prcp","humidity","pressure","cloud_cover","tmax","tmin"]
+            },
+            "climatology_context": {
+                "prcp_climo_pct":    round(float(feat_dict.get("prcp_climo_pct", 1.0)), 3),
+                "pressure_climo_z":  round(float(feat_dict.get("pressure_climo_z", 0.0)), 3),
+                "humidity_climo_pct":round(float(feat_dict.get("humidity_climo_pct", 1.0)), 3),
+                "pressure_delta_3h": feat_dict.get("pressure_delta_3h"),
+            },
+        }
+
+    # Slugs of cities that the v3.2 fusion model was trained to weight more
+    # heavily — must match app.core.config.ModelConfig.FLASH_FLOOD_PRONE_CITIES
+    # (which uses display-case names; we keep slugs here to avoid case bugs).
+    _FLASH_FLOOD_PRONE_SLUGS = {"islamabad", "rawalpindi", "peshawar", "lahore", "karachi"}
+
+    def _v2_feature_defaults(self, slug: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+        """Safe default dict covering every column WeatherDataPreprocessorV2
+        was fitted on, for use when only raw weather is available.
+
+        Mirrors (and is the single source of truth for) the fallback feat_dict
+        used by `predict_v2()` when the FeaturePipeline is unavailable.
+        """
+        now      = datetime.now(timezone.utc)
+        meta     = self._registry.get(slug, _meta_for(slug))
+        vuln     = meta.get("vulnerability") or DEFAULT_METADATA["vulnerability"]
+        is_ffp   = 1 if slug in self._FLASH_FLOOD_PRONE_SLUGS else 0
+
+        def _f(key: str, default: float) -> float:
+            v = raw.get(key)
+            try:
+                return float(v) if v is not None else float(default)
+            except (TypeError, ValueError):
+                return float(default)
+
+        prcp     = _f("prcp",     0.0)
+        humidity = _f("humidity", 50.0)
+        pressure = _f("pressure", 1013.0)
+        cloud    = _f("cloud_cover", 0.0)
+        tmax     = _f("tmax", 25.0)
+        tmin     = _f("tmin", 20.0)
+        tavg     = _f("tavg", (tmax + tmin) / 2.0)
+        dew      = _f("dew_point", tavg - 5.0)
+        wspd     = _f("wspd", 0.0)
+        temp_rng = _f("temp_range", max(tmax - tmin, 0.0))
+
+        month = int(raw.get("month") or now.month)
+        season = (
+            "Winter" if month in (12, 1, 2) else
+            "Spring" if month in (3, 4, 5)  else
+            "Summer" if month in (6, 7, 8)  else
+            "Autumn"
+        )
+
+        return {
+            # Raw numerical
+            "prcp":        prcp,
+            "humidity":    humidity,
+            "pressure":    pressure,
+            "cloud_cover": cloud,
+            "tmin":        tmin,
+            "tmax":        tmax,
+            "tavg":        tavg,
+            "temp_range":  temp_rng,
+            "dew_point":   dew,
+            "wspd":        wspd,
+            # Static derived
+            "tdew_spread":   max(tavg - dew, 0.0),
+            "moisture_flux": 0.0,
+            # Rolling deltas (V2 imputes these to 0.0 anyway, but explicit is safer)
+            "pressure_delta_3h":     0.0,
+            "pressure_delta_6h":     0.0,
+            "humidity_delta_3h":     0.0,
+            "rain_rate_1h":          0.0,
+            "rain_accumulation_3h":  0.0,
+            "rain_accumulation_6h":  0.0,
+            "cloud_jump_3h":         0.0,
+            # Climatological — neutral defaults.
+            # NOTE: `pressure_climo_z` is intentionally omitted. It is in
+            # WeatherDataPreprocessorV2.NUMERICAL_V2 but is NOT added by the
+            # training pipeline (`_ensure_derived` doesn't add it, and it is
+            # not in `_ZERO_IMPUTE_FEATURES`), so the imputer was fit on a
+            # 21-column subset that excludes it. Including it here would
+            # produce a 22-column transform-time array and break the imputer
+            # with a feature-count mismatch.
+            "prcp_climo_pct":     1.0,
+            "humidity_climo_pct": 1.0,
+            # Temporal — `is_monsoon_month` intentionally omitted (same
+            # reason as `pressure_climo_z` above: not in the training CSV,
+            # so the temporal MinMaxScaler was fit on the other 4 columns).
+            "month":             month,
+            "day":               int(raw.get("day")       or now.day),
+            "dayofweek":         int(raw.get("dayofweek") or now.weekday()),
+            "is_weekend":        int(raw.get("is_weekend", int(now.weekday() >= 5))),
+            # Categorical
+            "city_slug": slug,
+            "season":    season,
+            # Passthrough features (`vulnerability`, `is_flash_flood_prone`)
+            # are deliberately *not* included. They are listed in
+            # WeatherDataPreprocessorV2.PASSTHROUGH_V2 but were never present
+            # in the training CSV, so providing them at transform time would
+            # append 2 extra columns and break the model's input shape.
+        }
+
+    def _legacy_from_branches(
+        self,
+        slug: str,
+        features: Dict[str, Any],
+        branches: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Translate the v3.2 CityHybridModel output (raw branch percentiles +
+        variances) into the v3.1-shaped dict that legacy callers expect:
+        ``risk_level``, ``anomaly_score``, ``confidence``, ``is_anomaly``,
+        ``ae_score``, ``lstm_score``, ``hri_score``.
+
+        The blend weights (0.55 AE / 0.45 TCN) and the HRI formula
+        (0.40 anomaly + 0.35 rainfall + 0.25 vulnerability) match the
+        constants documented in CLAUDE.md.
+        """
+        ae_pct  = float(branches.get("ae_percentile",  0.0) or 0.0)
+        tcn_pct = float(branches.get("tcn_percentile", 0.0) or 0.0)
+        ae_var  = float(branches.get("ae_variance",    0.5) or 0.5)
+        tcn_var = float(branches.get("tcn_variance",   0.5) or 0.5)
+
+        # Combined anomaly score — same weighting as the v3.1 hybrid
+        anomaly_score = float(np.clip(0.55 * ae_pct + 0.45 * tcn_pct, 0.0, 1.0))
+
+        # Risk level bands. Match the bands used by predict_v2's risk_band
+        # mapping (Low/Moderate/High/Severe), but downcase "Moderate"→"Medium"
+        # to keep the legacy enum (the citizen app's riskToScenario maps
+        # Low→safe, Medium→warn, High→crit).
+        if   anomaly_score < 0.40: risk_level = "Low"
+        elif anomaly_score < 0.65: risk_level = "Medium"
+        else:                      risk_level = "High"
+
+        # Confidence ≈ 1 − mean variance. Variances live in [0, 0.5]ish,
+        # so this lands in [0.5, 1.0].
+        confidence = float(np.clip(1.0 - 0.5 * (ae_var + tcn_var), 0.0, 1.0))
+
+        # HRI: weighted blend of anomaly, rainfall, regional vulnerability.
+        prcp = float(features.get("prcp") or 0.0)
+        rain_norm = float(np.clip(prcp / 50.0, 0.0, 1.0))   # 50 mm/day = 1.0
+        meta = self._registry.get(slug, _meta_for(slug))
+        vuln = float(meta.get("vulnerability") or DEFAULT_METADATA["vulnerability"])
+        hri  = 0.40 * anomaly_score + 0.35 * rain_norm + 0.25 * vuln
+        hri_score = int(round(float(np.clip(hri, 0.0, 1.0)) * 100))
+
+        return {
+            "risk_level":    risk_level,
+            "anomaly_score": round(anomaly_score, 4),
+            "confidence":    round(confidence, 4),
+            "is_anomaly":    anomaly_score >= 0.40,
+            "ae_score":      round(ae_pct,  4),
+            "lstm_score":    round(tcn_pct, 4),  # legacy field name; tcn replaces lstm in v3.2
+            "hri_score":     hri_score,
+        }
+
+    def _preprocess(
+        self,
+        features: Dict[str, Any],
+        preprocessor,
+        slug: Optional[str] = None,
+    ) -> np.ndarray:
         """Convert raw feature dict → 1D numpy vector matching the model's input_dim."""
         if preprocessor is not None:
             import pandas as pd
 
-            # Ensure all temporal features the preprocessor needs are present.
-            # If only `date` is provided, derive month/day/dayofweek/is_weekend.
+            # If this is a V2 preprocessor, every NUMERICAL_V2 column has to
+            # be present at transform time (the imputer was fit on the full
+            # column set). Pre-populate via the shared helper, then let the
+            # caller's keys override.
+            try:
+                from app.ml.preprocessing_v2 import WeatherDataPreprocessorV2
+                if isinstance(preprocessor, WeatherDataPreprocessorV2):
+                    resolved_slug = slug or _slug(str(
+                        features.get("city_slug") or features.get("city") or ""
+                    ))
+                    base = self._v2_feature_defaults(resolved_slug, features)
+                    # Only allow caller-supplied features to override keys
+                    # that already exist in `base`. Anything else (e.g.
+                    # `pressure_climo_z`, `is_monsoon_month`,
+                    # `vulnerability`, `is_flash_flood_prone`) was not
+                    # in the training CSV, so the V2 imputer / scaler /
+                    # passthrough handlers would expand the column count
+                    # and break shape.
+                    for k, v in features.items():
+                        if v is not None and k in base:
+                            base[k] = v
+                    row = pd.DataFrame([base])
+                    out = preprocessor.transform(row)
+                    x = out[0] if isinstance(out, tuple) else out
+                    if x.ndim == 2:
+                        x = x[0]
+                    return np.asarray(x, dtype=float)
+            except ImportError:
+                pass  # V2 module not present in this build — fall through to V1
+
             row_dict = dict(features)
-            if "date" in row_dict and row_dict["date"]:
-                try:
-                    ts = pd.to_datetime(row_dict["date"])
-                    row_dict.setdefault("month",     ts.month)
-                    row_dict.setdefault("day",       ts.day)
-                    row_dict.setdefault("dayofweek", ts.dayofweek)
-                    row_dict.setdefault("is_weekend", int(ts.dayofweek >= 5))
-                except Exception:
-                    pass
+
+            # Ensure temporal features (month, day, dayofweek, is_weekend) are always
+            # present and valid. Without them, MinMaxScaler gets 0 for month (out of
+            # the training range 1–12), causing the AE to flag any request as anomalous.
+            date_src = row_dict.get("date") or None
+            try:
+                ts = pd.to_datetime(date_src) if date_src else pd.Timestamp.now()
+                row_dict.setdefault("month",     ts.month)
+                row_dict.setdefault("day",       ts.day)
+                row_dict.setdefault("dayofweek", ts.dayofweek)
+                row_dict.setdefault("is_weekend", int(ts.dayofweek >= 5))
+            except Exception:
+                now = datetime.now(timezone.utc)
+                row_dict.setdefault("month",     now.month)
+                row_dict.setdefault("day",       now.day)
+                row_dict.setdefault("dayofweek", now.weekday())
+                row_dict.setdefault("is_weekend", int(now.weekday() >= 5))
+
+            # Inject city/region/season so OHE doesn't default to all-zero "UNKNOWN".
+            # OHE unknown category is already safe (all-zero), but an active category
+            # matching the city's training data improves reconstruction.
+            if hasattr(preprocessor, 'ohe_categories'):
+                # City: use the single known city category in this preprocessor
+                if "city" not in row_dict and "city" in preprocessor.ohe_categories:
+                    cats = preprocessor.ohe_categories["city"]
+                    if cats:
+                        row_dict.setdefault("city", cats[0])
+                # Region: same
+                if "region" not in row_dict and "region" in preprocessor.ohe_categories:
+                    cats = preprocessor.ohe_categories["region"]
+                    if cats:
+                        row_dict.setdefault("region", cats[0])
+                # Season: derive from current month if not provided
+                if "season" not in row_dict and "season" in preprocessor.ohe_categories:
+                    m = row_dict.get("month", datetime.now(timezone.utc).month)
+                    season = (
+                        "Winter" if m in (12, 1, 2) else
+                        "Spring" if m in (3, 4, 5)  else
+                        "Summer" if m in (6, 7, 8)  else  # includes monsoon
+                        "Autumn"
+                    )
+                    row_dict.setdefault("season", season)
 
             row = pd.DataFrame([row_dict])
             out = preprocessor.transform(row)

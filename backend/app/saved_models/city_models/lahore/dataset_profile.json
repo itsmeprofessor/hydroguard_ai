@@ -1,0 +1,458 @@
+{
+  "profiled_at": "2026-05-02T18:56:55.239610",
+  "sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+  "file": "pakistan_weather_2000_2024.csv",
+  "n_rows": 31779,
+  "n_columns": 27,
+  "date_column": "date",
+  "city_column": "city",
+  "target_column": null,
+  "date_range": {
+    "min": "2000-01-01",
+    "max": "2024-12-31",
+    "span_days": 9131
+  },
+  "temporal_resolution": "hourly",
+  "cities": [
+    "Gilgit",
+    "Islamabad",
+    "Karachi",
+    "Lahore",
+    "Peshawar",
+    "Quetta"
+  ],
+  "city_count": 6,
+  "city_record_counts": {
+    "Islamabad": 9132,
+    "Karachi": 5844,
+    "Peshawar": 5114,
+    "Gilgit": 4383,
+    "Quetta": 4018,
+    "Lahore": 3288
+  },
+  "features": {
+    "year": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "month": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "day": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "dayofweek": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "is_weekend": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "season": {
+      "type": "categorical",
+      "group": "unknown",
+      "weight": 0.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "region": {
+      "type": "categorical",
+      "group": "unknown",
+      "weight": 0.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "latitude": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "longitude": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "elevation": {
+      "type": "numerical",
+      "group": "spatial",
+      "weight": 1.0,
+      "unit": "m",
+      "missing": 0.0
+    },
+    "tmin": {
+      "type": "numerical",
+      "group": "context",
+      "weight": 0.1,
+      "unit": "\u00b0C",
+      "missing": 0.0
+    },
+    "tmax": {
+      "type": "numerical",
+      "group": "context",
+      "weight": 0.1,
+      "unit": "\u00b0C",
+      "missing": 0.0
+    },
+    "tavg": {
+      "type": "numerical",
+      "group": "context",
+      "weight": 0.1,
+      "unit": "\u00b0C",
+      "missing": 0.0
+    },
+    "prcp": {
+      "type": "numerical",
+      "group": "primary",
+      "weight": 3.0,
+      "unit": "mm",
+      "missing": 0.0
+    },
+    "wspd": {
+      "type": "numerical",
+      "group": "secondary",
+      "weight": 1.0,
+      "unit": "km/h",
+      "missing": 0.0
+    },
+    "humidity": {
+      "type": "numerical",
+      "group": "primary",
+      "weight": 2.0,
+      "unit": "%",
+      "missing": 0.0
+    },
+    "pressure": {
+      "type": "numerical",
+      "group": "primary",
+      "weight": 2.0,
+      "unit": "hPa",
+      "missing": 0.0
+    },
+    "dew_point": {
+      "type": "numerical",
+      "group": "secondary",
+      "weight": 1.0,
+      "unit": "\u00b0C",
+      "missing": 0.0
+    },
+    "cloud_cover": {
+      "type": "numerical",
+      "group": "primary",
+      "weight": 1.5,
+      "unit": "%",
+      "missing": 0.0
+    },
+    "visibility": {
+      "type": "numerical",
+      "group": "secondary",
+      "weight": 0.8,
+      "unit": "km",
+      "missing": 1.0
+    },
+    "temp_range": {
+      "type": "numerical",
+      "group": "context",
+      "weight": 0.1,
+      "unit": "\u00b0C",
+      "missing": 0.0
+    },
+    "is_hot_day": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "is_cold_day": {
+      "type": "numerical",
+      "group": "unknown",
+      "weight": 1.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "rainfall_intensity": {
+      "type": "categorical",
+      "group": "unknown",
+      "weight": 0.0,
+      "unit": "",
+      "missing": 0.0
+    },
+    "wind_category": {
+      "type": "categorical",
+      "group": "unknown",
+      "weight": 0.0,
+      "unit": "",
+      "missing": 0.0
+    }
+  },
+  "feature_stats": {
+    "year": {
+      "mean": 2011.1034,
+      "std": 7.1768,
+      "min": 2000.0,
+      "max": 2024.0,
+      "p25": 2005.0,
+      "p50": 2010.0,
+      "p75": 2017.0,
+      "p99": 2024.0
+    },
+    "month": {
+      "mean": 6.5226,
+      "std": 3.4488,
+      "min": 1.0,
+      "max": 12.0,
+      "p25": 4.0,
+      "p50": 7.0,
+      "p75": 10.0,
+      "p99": 12.0
+    },
+    "day": {
+      "mean": 15.7306,
+      "std": 8.8006,
+      "min": 1.0,
+      "max": 31.0,
+      "p25": 8.0,
+      "p50": 16.0,
+      "p75": 23.0,
+      "p99": 31.0
+    },
+    "dayofweek": {
+      "mean": 3.0001,
+      "std": 2.0003,
+      "min": 0.0,
+      "max": 6.0,
+      "p25": 1.0,
+      "p50": 3.0,
+      "p75": 5.0,
+      "p99": 6.0
+    },
+    "is_weekend": {
+      "mean": 0.2858,
+      "std": 0.4518,
+      "min": 0.0,
+      "max": 1.0,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 1.0,
+      "p99": 1.0
+    },
+    "latitude": {
+      "mean": 31.7596,
+      "std": 3.6532,
+      "min": 24.8607,
+      "max": 35.9221,
+      "p25": 30.1798,
+      "p50": 33.6844,
+      "p75": 34.0151,
+      "p99": 35.9221
+    },
+    "longitude": {
+      "mean": 71.2399,
+      "std": 2.9762,
+      "min": 66.975,
+      "max": 74.3436,
+      "p25": 67.0011,
+      "p50": 73.0479,
+      "p75": 73.0479,
+      "p99": 74.3436
+    },
+    "elevation": {
+      "mean": 651.6568,
+      "std": 590.6252,
+      "min": 8.0,
+      "max": 1680.0,
+      "p25": 217.0,
+      "p50": 540.0,
+      "p75": 1500.0,
+      "p99": 1680.0
+    },
+    "tmin": {
+      "mean": 15.1865,
+      "std": 9.6139,
+      "min": -21.3,
+      "max": 32.6,
+      "p25": 8.1,
+      "p50": 16.7,
+      "p75": 23.5,
+      "p99": 29.1
+    },
+    "tmax": {
+      "mean": 25.7876,
+      "std": 9.8145,
+      "min": -12.9,
+      "max": 47.3,
+      "p25": 19.7,
+      "p50": 28.5,
+      "p75": 32.8,
+      "p99": 42.2
+    },
+    "tavg": {
+      "mean": 20.3554,
+      "std": 9.5733,
+      "min": -15.6,
+      "max": 39.2,
+      "p25": 13.5,
+      "p50": 22.7,
+      "p75": 28.0,
+      "p99": 35.0
+    },
+    "prcp": {
+      "mean": 1.7178,
+      "std": 5.9711,
+      "min": 0.0,
+      "max": 201.1,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.5,
+      "p99": 24.922
+    },
+    "wspd": {
+      "mean": 12.9023,
+      "std": 7.8578,
+      "min": 0.8,
+      "max": 50.6,
+      "p25": 7.9,
+      "p50": 11.3,
+      "p75": 16.8,
+      "p99": 35.9
+    },
+    "humidity": {
+      "mean": 58.1386,
+      "std": 18.4564,
+      "min": 6.0,
+      "max": 96.0,
+      "p25": 45.0,
+      "p50": 61.0,
+      "p75": 73.0,
+      "p99": 88.0
+    },
+    "pressure": {
+      "mean": 1010.8292,
+      "std": 8.4811,
+      "min": 989.7,
+      "max": 1042.9,
+      "p25": 1004.0,
+      "p50": 1011.4,
+      "p75": 1016.8,
+      "p99": 1032.0
+    },
+    "dew_point": {
+      "mean": 10.1291,
+      "std": 10.2639,
+      "min": -28.7,
+      "max": 27.5,
+      "p25": 3.7,
+      "p50": 10.3,
+      "p75": 18.8,
+      "p99": 25.7
+    },
+    "cloud_cover": {
+      "mean": 32.8521,
+      "std": 30.2469,
+      "min": 0.0,
+      "max": 100.0,
+      "p25": 5.0,
+      "p50": 25.0,
+      "p75": 55.0,
+      "p99": 99.0
+    },
+    "temp_range": {
+      "mean": 10.6011,
+      "std": 3.7873,
+      "min": 0.7,
+      "max": 22.5,
+      "p25": 7.8,
+      "p50": 10.5,
+      "p75": 13.4,
+      "p99": 18.9
+    },
+    "is_hot_day": {
+      "mean": 0.0098,
+      "std": 0.0983,
+      "min": 0.0,
+      "max": 1.0,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.0,
+      "p99": 0.0
+    },
+    "is_cold_day": {
+      "mean": 0.0673,
+      "std": 0.2506,
+      "min": 0.0,
+      "max": 1.0,
+      "p25": 0.0,
+      "p50": 0.0,
+      "p75": 0.0,
+      "p99": 1.0
+    }
+  },
+  "completeness": {
+    "date": 1.0,
+    "year": 1.0,
+    "month": 1.0,
+    "day": 1.0,
+    "dayofweek": 1.0,
+    "is_weekend": 1.0,
+    "season": 1.0,
+    "city": 1.0,
+    "region": 1.0,
+    "latitude": 1.0,
+    "longitude": 1.0,
+    "elevation": 1.0,
+    "tmin": 1.0,
+    "tmax": 1.0,
+    "tavg": 1.0,
+    "prcp": 1.0,
+    "wspd": 1.0,
+    "humidity": 1.0,
+    "pressure": 1.0,
+    "dew_point": 1.0,
+    "cloud_cover": 1.0,
+    "visibility": 0.0,
+    "temp_range": 1.0,
+    "is_hot_day": 1.0,
+    "is_cold_day": 1.0,
+    "rainfall_intensity": 1.0,
+    "wind_category": 1.0
+  },
+  "derived_temporal_features": [
+    "month",
+    "day",
+    "dayofweek",
+    "is_weekend",
+    "hour"
+  ],
+  "modeling": {
+    "suggested_sequence_length": 72,
+    "suggested_model_type": "ae_lstm_attention",
+    "suggested_epochs": 200,
+    "can_train_lstm": true,
+    "has_supervised_labels": false,
+    "n_features": 21,
+    "n_cities": 6,
+    "notes": "Unsupervised AE+LSTM reconstruction scoring. Add flood/cloudburst labels to enable supervised fusion."
+  }
+}

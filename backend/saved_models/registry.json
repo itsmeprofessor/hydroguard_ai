@@ -1,0 +1,6538 @@
+{
+  "gilgit": [
+    {
+      "city_slug": "gilgit",
+      "version": 1,
+      "promoted_at": "2026-05-02T18:54:03.412197+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2009-08-06",
+      "val_date_start": "2009-08-07",
+      "val_date_end": "2011-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": "./backend/data/pakistan_weather_2000_2024.csv",
+      "n_train": 3506,
+      "n_val": 877,
+      "ae_val_loss": 0.140292,
+      "lstm_val_loss": 0.184152,
+      "ae_threshold_p99": 0.399908,
+      "epochs_ae": 66,
+      "epochs_lstm": 89,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.14029230177402496,
+        "lstm_val_loss_best": 0.18415170907974243
+      },
+      "calibration_params": {
+        "ae_mean": 0.13159445473959858,
+        "ae_std": 0.07397434387780967,
+        "ae_p99": 0.3999082717201643,
+        "lstm_mean": 0.16780467075692412,
+        "lstm_std": 0.1476783831190805,
+        "lstm_p99": 0.7305451909314481
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "gilgit",
+      "version": 2,
+      "promoted_at": "2026-05-02T19:58:52.374738+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2009-08-06",
+      "val_date_start": "2009-08-07",
+      "val_date_end": "2011-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 3506,
+      "n_val": 877,
+      "ae_val_loss": 0.140292,
+      "lstm_val_loss": 0.184152,
+      "ae_threshold_p99": 0.399908,
+      "epochs_ae": 66,
+      "epochs_lstm": 89,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.14029230177402496,
+        "lstm_val_loss_best": 0.18415170907974243
+      },
+      "calibration_params": {
+        "ae_mean": 0.13159445473959858,
+        "ae_std": 0.07397434387780967,
+        "ae_p99": 0.3999082717201643,
+        "lstm_mean": 0.16780467075692412,
+        "lstm_std": 0.1476783831190805,
+        "lstm_p99": 0.7305451909314481
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "gilgit",
+      "version": 3,
+      "promoted_at": "2026-05-02T20:55:20.929893+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2009-08-06",
+      "val_date_start": "2009-08-07",
+      "val_date_end": "2011-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 3506,
+      "n_val": 877,
+      "ae_val_loss": 0.140292,
+      "lstm_val_loss": 0.184152,
+      "ae_threshold_p99": 0.399908,
+      "epochs_ae": 66,
+      "epochs_lstm": 89,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.14029230177402496,
+        "lstm_val_loss_best": 0.18415170907974243
+      },
+      "calibration_params": {
+        "ae_mean": 0.13159445473959858,
+        "ae_std": 0.07397434387780967,
+        "ae_p99": 0.3999082717201643,
+        "lstm_mean": 0.16780467075692412,
+        "lstm_std": 0.1476783831190805,
+        "lstm_p99": 0.7305451909314481
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "gilgit",
+      "version": 4,
+      "promoted_at": "2026-05-02T21:00:41.114919+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2009-08-06",
+      "val_date_start": "2009-08-07",
+      "val_date_end": "2011-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 3506,
+      "n_val": 877,
+      "ae_val_loss": 0.140292,
+      "lstm_val_loss": 0.184152,
+      "ae_threshold_p99": 0.399908,
+      "epochs_ae": 66,
+      "epochs_lstm": 89,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.14029230177402496,
+        "lstm_val_loss_best": 0.18415170907974243
+      },
+      "calibration_params": {
+        "ae_mean": 0.13159445473959858,
+        "ae_std": 0.07397434387780967,
+        "ae_p99": 0.3999082717201643,
+        "lstm_mean": 0.16780467075692412,
+        "lstm_std": 0.1476783831190805,
+        "lstm_p99": 0.7305451909314481
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "gilgit",
+      "version": 5,
+      "promoted_at": "2026-05-03T10:26:43.256593+00:00",
+      "status": "active",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2009-08-06",
+      "val_date_start": "2009-08-07",
+      "val_date_end": "2011-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 3506,
+      "n_val": 877,
+      "ae_val_loss": 0.140292,
+      "lstm_val_loss": 0.184152,
+      "ae_threshold_p99": 0.399908,
+      "epochs_ae": 66,
+      "epochs_lstm": 89,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.14029230177402496,
+        "lstm_val_loss_best": 0.18415170907974243
+      },
+      "calibration_params": {
+        "ae_mean": 0.13159445473959858,
+        "ae_std": 0.07397434387780967,
+        "ae_p99": 0.3999082717201643,
+        "lstm_mean": 0.16780467075692412,
+        "lstm_std": 0.1476783831190805,
+        "lstm_p99": 0.7305451909314481
+      },
+      "notes": "Trained with 10 numerical features."
+    }
+  ],
+  "islamabad": [
+    {
+      "city_slug": "islamabad",
+      "version": 1,
+      "promoted_at": "2026-05-02T18:55:45.797209+00:00",
+      "status": "archived",
+      "git_commit": "unknown",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2019-12-31",
+      "val_date_start": "2020-01-01",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": "./backend/data/pakistan_weather_2000_2024.csv",
+      "n_train": 7305,
+      "n_val": 1827,
+      "ae_val_loss": 0.206876,
+      "lstm_val_loss": 0.197755,
+      "ae_threshold_p99": 0.495586,
+      "epochs_ae": 79,
+      "epochs_lstm": 93,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.20687559247016907,
+        "lstm_val_loss_best": 0.1977553814649582
+      },
+      "calibration_params": {
+        "ae_mean": 0.12901406152596387,
+        "ae_std": 0.12387755795005582,
+        "ae_p99": 0.4955864615917654,
+        "lstm_mean": 0.16500595280149352,
+        "lstm_std": 0.5839728155900278,
+        "lstm_p99": 0.9577333615291004
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "islamabad",
+      "version": 2,
+      "promoted_at": "2026-05-02T20:00:35.833106+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2019-12-31",
+      "val_date_start": "2020-01-01",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 7305,
+      "n_val": 1827,
+      "ae_val_loss": 0.206876,
+      "lstm_val_loss": 0.197755,
+      "ae_threshold_p99": 0.495586,
+      "epochs_ae": 79,
+      "epochs_lstm": 93,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.20687559247016907,
+        "lstm_val_loss_best": 0.1977553814649582
+      },
+      "calibration_params": {
+        "ae_mean": 0.12901406152596387,
+        "ae_std": 0.12387755795005582,
+        "ae_p99": 0.4955864615917654,
+        "lstm_mean": 0.16500595280149352,
+        "lstm_std": 0.5839728155900278,
+        "lstm_p99": 0.9577333615291004
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "islamabad",
+      "version": 3,
+      "promoted_at": "2026-05-02T20:56:58.317523+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2019-12-31",
+      "val_date_start": "2020-01-01",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 7305,
+      "n_val": 1827,
+      "ae_val_loss": 0.206876,
+      "lstm_val_loss": 0.197755,
+      "ae_threshold_p99": 0.495586,
+      "epochs_ae": 79,
+      "epochs_lstm": 93,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.20687559247016907,
+        "lstm_val_loss_best": 0.1977553814649582
+      },
+      "calibration_params": {
+        "ae_mean": 0.12901406152596387,
+        "ae_std": 0.12387755795005582,
+        "ae_p99": 0.4955864615917654,
+        "lstm_mean": 0.16500595280149352,
+        "lstm_std": 0.5839728155900278,
+        "lstm_p99": 0.9577333615291004
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "islamabad",
+      "version": 4,
+      "promoted_at": "2026-05-02T21:02:22.171222+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2019-12-31",
+      "val_date_start": "2020-01-01",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 7305,
+      "n_val": 1827,
+      "ae_val_loss": 0.206876,
+      "lstm_val_loss": 0.197755,
+      "ae_threshold_p99": 0.495586,
+      "epochs_ae": 79,
+      "epochs_lstm": 93,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.20687559247016907,
+        "lstm_val_loss_best": 0.1977553814649582
+      },
+      "calibration_params": {
+        "ae_mean": 0.12901406152596387,
+        "ae_std": 0.12387755795005582,
+        "ae_p99": 0.4955864615917654,
+        "lstm_mean": 0.16500595280149352,
+        "lstm_std": 0.5839728155900278,
+        "lstm_p99": 0.9577333615291004
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "islamabad",
+      "version": 5,
+      "promoted_at": "2026-05-03T10:28:23.730777+00:00",
+      "status": "active",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2019-12-31",
+      "val_date_start": "2020-01-01",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 7305,
+      "n_val": 1827,
+      "ae_val_loss": 0.206876,
+      "lstm_val_loss": 0.197755,
+      "ae_threshold_p99": 0.495586,
+      "epochs_ae": 79,
+      "epochs_lstm": 93,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.20687559247016907,
+        "lstm_val_loss_best": 0.1977553814649582
+      },
+      "calibration_params": {
+        "ae_mean": 0.12901406152596387,
+        "ae_std": 0.12387755795005582,
+        "ae_p99": 0.4955864615917654,
+        "lstm_mean": 0.16500595280149352,
+        "lstm_std": 0.5839728155900278,
+        "lstm_p99": 0.9577333615291004
+      },
+      "notes": "Trained with 10 numerical features."
+    }
+  ],
+  "karachi": [
+    {
+      "city_slug": "karachi",
+      "version": 1,
+      "promoted_at": "2026-05-02T18:56:54.812486+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2012-10-18",
+      "val_date_start": "2012-10-19",
+      "val_date_end": "2015-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": "./backend/data/pakistan_weather_2000_2024.csv",
+      "n_train": 4675,
+      "n_val": 1169,
+      "ae_val_loss": 0.132443,
+      "lstm_val_loss": 0.124151,
+      "ae_threshold_p99": 0.52733,
+      "epochs_ae": 40,
+      "epochs_lstm": 101,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13244326412677765,
+        "lstm_val_loss_best": 0.12415055185556412
+      },
+      "calibration_params": {
+        "ae_mean": 0.1324488460606584,
+        "ae_std": 0.12317503250676722,
+        "ae_p99": 0.5273295156955886,
+        "lstm_mean": 0.15374432163018967,
+        "lstm_std": 0.9487807070327987,
+        "lstm_p99": 0.6051626596988251
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "karachi",
+      "version": 2,
+      "promoted_at": "2026-05-02T20:01:40.250046+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2012-10-18",
+      "val_date_start": "2012-10-19",
+      "val_date_end": "2015-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 4675,
+      "n_val": 1169,
+      "ae_val_loss": 0.132443,
+      "lstm_val_loss": 0.124151,
+      "ae_threshold_p99": 0.52733,
+      "epochs_ae": 40,
+      "epochs_lstm": 101,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13244326412677765,
+        "lstm_val_loss_best": 0.12415055185556412
+      },
+      "calibration_params": {
+        "ae_mean": 0.1324488460606584,
+        "ae_std": 0.12317503250676722,
+        "ae_p99": 0.5273295156955886,
+        "lstm_mean": 0.15374432163018967,
+        "lstm_std": 0.9487807070327987,
+        "lstm_p99": 0.6051626596988251
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "karachi",
+      "version": 3,
+      "promoted_at": "2026-05-02T20:58:07.568273+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2012-10-18",
+      "val_date_start": "2012-10-19",
+      "val_date_end": "2015-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 4675,
+      "n_val": 1169,
+      "ae_val_loss": 0.132443,
+      "lstm_val_loss": 0.124151,
+      "ae_threshold_p99": 0.52733,
+      "epochs_ae": 40,
+      "epochs_lstm": 101,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13244326412677765,
+        "lstm_val_loss_best": 0.12415055185556412
+      },
+      "calibration_params": {
+        "ae_mean": 0.1324488460606584,
+        "ae_std": 0.12317503250676722,
+        "ae_p99": 0.5273295156955886,
+        "lstm_mean": 0.15374432163018967,
+        "lstm_std": 0.9487807070327987,
+        "lstm_p99": 0.6051626596988251
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "karachi",
+      "version": 4,
+      "promoted_at": "2026-05-02T21:03:28.027537+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2012-10-18",
+      "val_date_start": "2012-10-19",
+      "val_date_end": "2015-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 4675,
+      "n_val": 1169,
+      "ae_val_loss": 0.132443,
+      "lstm_val_loss": 0.124151,
+      "ae_threshold_p99": 0.52733,
+      "epochs_ae": 40,
+      "epochs_lstm": 101,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13244326412677765,
+        "lstm_val_loss_best": 0.12415055185556412
+      },
+      "calibration_params": {
+        "ae_mean": 0.1324488460606584,
+        "ae_std": 0.12317503250676722,
+        "ae_p99": 0.5273295156955886,
+        "lstm_mean": 0.15374432163018967,
+        "lstm_std": 0.9487807070327987,
+        "lstm_p99": 0.6051626596988251
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "karachi",
+      "version": 5,
+      "promoted_at": "2026-05-03T10:29:31.275062+00:00",
+      "status": "active",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2012-10-18",
+      "val_date_start": "2012-10-19",
+      "val_date_end": "2015-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 4675,
+      "n_val": 1169,
+      "ae_val_loss": 0.132443,
+      "lstm_val_loss": 0.124151,
+      "ae_threshold_p99": 0.52733,
+      "epochs_ae": 40,
+      "epochs_lstm": 101,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13244326412677765,
+        "lstm_val_loss_best": 0.12415055185556412
+      },
+      "calibration_params": {
+        "ae_mean": 0.1324488460606584,
+        "ae_std": 0.12317503250676722,
+        "ae_p99": 0.5273295156955886,
+        "lstm_mean": 0.15374432163018967,
+        "lstm_std": 0.9487807070327987,
+        "lstm_p99": 0.6051626596988251
+      },
+      "notes": "Trained with 10 numerical features."
+    }
+  ],
+  "lahore": [
+    {
+      "city_slug": "lahore",
+      "version": 1,
+      "promoted_at": "2026-05-02T18:57:48.523918+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2016-01-01",
+      "train_date_end": "2023-03-14",
+      "val_date_start": "2023-03-15",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": "./backend/data/pakistan_weather_2000_2024.csv",
+      "n_train": 2630,
+      "n_val": 658,
+      "ae_val_loss": 0.134135,
+      "lstm_val_loss": 0.211396,
+      "ae_threshold_p99": 0.443049,
+      "epochs_ae": 78,
+      "epochs_lstm": 117,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13413502275943756,
+        "lstm_val_loss_best": 0.21139608323574066
+      },
+      "calibration_params": {
+        "ae_mean": 0.11482827806951168,
+        "ae_std": 0.13605028453310214,
+        "ae_p99": 0.44304903044955213,
+        "lstm_mean": 0.17040268147379034,
+        "lstm_std": 0.7480092253003974,
+        "lstm_p99": 1.020763239481298
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "lahore",
+      "version": 2,
+      "promoted_at": "2026-05-02T20:02:33.053069+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2016-01-01",
+      "train_date_end": "2023-03-14",
+      "val_date_start": "2023-03-15",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 2630,
+      "n_val": 658,
+      "ae_val_loss": 0.134135,
+      "lstm_val_loss": 0.211396,
+      "ae_threshold_p99": 0.443049,
+      "epochs_ae": 78,
+      "epochs_lstm": 117,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13413502275943756,
+        "lstm_val_loss_best": 0.21139608323574066
+      },
+      "calibration_params": {
+        "ae_mean": 0.11482827806951168,
+        "ae_std": 0.13605028453310214,
+        "ae_p99": 0.44304903044955213,
+        "lstm_mean": 0.17040268147379034,
+        "lstm_std": 0.7480092253003974,
+        "lstm_p99": 1.020763239481298
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "lahore",
+      "version": 3,
+      "promoted_at": "2026-05-02T20:59:04.883675+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2016-01-01",
+      "train_date_end": "2023-03-14",
+      "val_date_start": "2023-03-15",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 2630,
+      "n_val": 658,
+      "ae_val_loss": 0.134135,
+      "lstm_val_loss": 0.211396,
+      "ae_threshold_p99": 0.443049,
+      "epochs_ae": 78,
+      "epochs_lstm": 117,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13413502275943756,
+        "lstm_val_loss_best": 0.21139608323574066
+      },
+      "calibration_params": {
+        "ae_mean": 0.11482827806951168,
+        "ae_std": 0.13605028453310214,
+        "ae_p99": 0.44304903044955213,
+        "lstm_mean": 0.17040268147379034,
+        "lstm_std": 0.7480092253003974,
+        "lstm_p99": 1.020763239481298
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "lahore",
+      "version": 4,
+      "promoted_at": "2026-05-02T21:04:23.283525+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2016-01-01",
+      "train_date_end": "2023-03-14",
+      "val_date_start": "2023-03-15",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 2630,
+      "n_val": 658,
+      "ae_val_loss": 0.134135,
+      "lstm_val_loss": 0.211396,
+      "ae_threshold_p99": 0.443049,
+      "epochs_ae": 78,
+      "epochs_lstm": 117,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13413502275943756,
+        "lstm_val_loss_best": 0.21139608323574066
+      },
+      "calibration_params": {
+        "ae_mean": 0.11482827806951168,
+        "ae_std": 0.13605028453310214,
+        "ae_p99": 0.44304903044955213,
+        "lstm_mean": 0.17040268147379034,
+        "lstm_std": 0.7480092253003974,
+        "lstm_p99": 1.020763239481298
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "lahore",
+      "version": 5,
+      "promoted_at": "2026-05-03T10:30:27.203078+00:00",
+      "status": "active",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2016-01-01",
+      "train_date_end": "2023-03-14",
+      "val_date_start": "2023-03-15",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 2630,
+      "n_val": 658,
+      "ae_val_loss": 0.134135,
+      "lstm_val_loss": 0.211396,
+      "ae_threshold_p99": 0.443049,
+      "epochs_ae": 78,
+      "epochs_lstm": 117,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13413502275943756,
+        "lstm_val_loss_best": 0.21139608323574066
+      },
+      "calibration_params": {
+        "ae_mean": 0.11482827806951168,
+        "ae_std": 0.13605028453310214,
+        "ae_p99": 0.44304903044955213,
+        "lstm_mean": 0.17040268147379034,
+        "lstm_std": 0.7480092253003974,
+        "lstm_p99": 1.020763239481298
+      },
+      "notes": "Trained with 10 numerical features."
+    }
+  ],
+  "peshawar": [
+    {
+      "city_slug": "peshawar",
+      "version": 1,
+      "promoted_at": "2026-05-02T18:59:00.892317+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2011-03-14",
+      "val_date_start": "2011-03-15",
+      "val_date_end": "2013-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": "./backend/data/pakistan_weather_2000_2024.csv",
+      "n_train": 4091,
+      "n_val": 1023,
+      "ae_val_loss": 0.134281,
+      "lstm_val_loss": 0.171023,
+      "ae_threshold_p99": 0.579905,
+      "epochs_ae": 80,
+      "epochs_lstm": 104,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13428114354610443,
+        "lstm_val_loss_best": 0.1710233986377716
+      },
+      "calibration_params": {
+        "ae_mean": 0.1289197309860032,
+        "ae_std": 0.15031413531589694,
+        "ae_p99": 0.579905149360305,
+        "lstm_mean": 0.166221949005398,
+        "lstm_std": 0.6008123845870467,
+        "lstm_p99": 0.9096262285772162
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "peshawar",
+      "version": 2,
+      "promoted_at": "2026-05-02T20:03:39.692584+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2011-03-14",
+      "val_date_start": "2011-03-15",
+      "val_date_end": "2013-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 4091,
+      "n_val": 1023,
+      "ae_val_loss": 0.134281,
+      "lstm_val_loss": 0.171023,
+      "ae_threshold_p99": 0.579905,
+      "epochs_ae": 80,
+      "epochs_lstm": 104,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13428114354610443,
+        "lstm_val_loss_best": 0.1710233986377716
+      },
+      "calibration_params": {
+        "ae_mean": 0.1289197309860032,
+        "ae_std": 0.15031413531589694,
+        "ae_p99": 0.579905149360305,
+        "lstm_mean": 0.166221949005398,
+        "lstm_std": 0.6008123845870467,
+        "lstm_p99": 0.9096262285772162
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "peshawar",
+      "version": 3,
+      "promoted_at": "2026-05-02T21:05:32.277148+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2011-03-14",
+      "val_date_start": "2011-03-15",
+      "val_date_end": "2013-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 4091,
+      "n_val": 1023,
+      "ae_val_loss": 0.134281,
+      "lstm_val_loss": 0.171023,
+      "ae_threshold_p99": 0.579905,
+      "epochs_ae": 80,
+      "epochs_lstm": 104,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13428114354610443,
+        "lstm_val_loss_best": 0.1710233986377716
+      },
+      "calibration_params": {
+        "ae_mean": 0.1289197309860032,
+        "ae_std": 0.15031413531589694,
+        "ae_p99": 0.579905149360305,
+        "lstm_mean": 0.166221949005398,
+        "lstm_std": 0.6008123845870467,
+        "lstm_p99": 0.9096262285772162
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "peshawar",
+      "version": 4,
+      "promoted_at": "2026-05-03T10:31:37.401391+00:00",
+      "status": "active",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2000-01-01",
+      "train_date_end": "2011-03-14",
+      "val_date_start": "2011-03-15",
+      "val_date_end": "2013-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 4091,
+      "n_val": 1023,
+      "ae_val_loss": 0.134281,
+      "lstm_val_loss": 0.171023,
+      "ae_threshold_p99": 0.579905,
+      "epochs_ae": 80,
+      "epochs_lstm": 104,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.13428114354610443,
+        "lstm_val_loss_best": 0.1710233986377716
+      },
+      "calibration_params": {
+        "ae_mean": 0.1289197309860032,
+        "ae_std": 0.15031413531589694,
+        "ae_p99": 0.579905149360305,
+        "lstm_mean": 0.166221949005398,
+        "lstm_std": 0.6008123845870467,
+        "lstm_p99": 0.9096262285772162
+      },
+      "notes": "Trained with 10 numerical features."
+    }
+  ],
+  "quetta": [
+    {
+      "city_slug": "quetta",
+      "version": 1,
+      "promoted_at": "2026-05-02T18:59:54.305190+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2014-01-01",
+      "train_date_end": "2022-10-19",
+      "val_date_start": "2022-10-20",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": "./backend/data/pakistan_weather_2000_2024.csv",
+      "n_train": 3214,
+      "n_val": 804,
+      "ae_val_loss": 0.181504,
+      "lstm_val_loss": 0.204391,
+      "ae_threshold_p99": 0.614,
+      "epochs_ae": 46,
+      "epochs_lstm": 107,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.18150414526462555,
+        "lstm_val_loss_best": 0.204391211271286
+      },
+      "calibration_params": {
+        "ae_mean": 0.16874975754067065,
+        "ae_std": 0.14213338220540342,
+        "ae_p99": 0.6139998683257081,
+        "lstm_mean": 0.1772705936129848,
+        "lstm_std": 0.3348253002691479,
+        "lstm_p99": 0.908621817165815
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "quetta",
+      "version": 2,
+      "promoted_at": "2026-05-02T20:04:36.239164+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2014-01-01",
+      "train_date_end": "2022-10-19",
+      "val_date_start": "2022-10-20",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 3214,
+      "n_val": 804,
+      "ae_val_loss": 0.181504,
+      "lstm_val_loss": 0.204391,
+      "ae_threshold_p99": 0.614,
+      "epochs_ae": 46,
+      "epochs_lstm": 107,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.18150414526462555,
+        "lstm_val_loss_best": 0.204391211271286
+      },
+      "calibration_params": {
+        "ae_mean": 0.16874975754067065,
+        "ae_std": 0.14213338220540342,
+        "ae_p99": 0.6139998683257081,
+        "lstm_mean": 0.1772705936129848,
+        "lstm_std": 0.3348253002691479,
+        "lstm_p99": 0.908621817165815
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "quetta",
+      "version": 3,
+      "promoted_at": "2026-05-02T21:06:29.011272+00:00",
+      "status": "archived",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2014-01-01",
+      "train_date_end": "2022-10-19",
+      "val_date_start": "2022-10-20",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 3214,
+      "n_val": 804,
+      "ae_val_loss": 0.181504,
+      "lstm_val_loss": 0.204391,
+      "ae_threshold_p99": 0.614,
+      "epochs_ae": 46,
+      "epochs_lstm": 107,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.18150414526462555,
+        "lstm_val_loss_best": 0.204391211271286
+      },
+      "calibration_params": {
+        "ae_mean": 0.16874975754067065,
+        "ae_std": 0.14213338220540342,
+        "ae_p99": 0.6139998683257081,
+        "lstm_mean": 0.1772705936129848,
+        "lstm_std": 0.3348253002691479,
+        "lstm_p99": 0.908621817165815
+      },
+      "notes": "Trained with 10 numerical features."
+    },
+    {
+      "city_slug": "quetta",
+      "version": 4,
+      "promoted_at": "2026-05-03T10:32:34.825314+00:00",
+      "status": "active",
+      "git_commit": "16cf128",
+      "architecture": "ae_lstm_attention",
+      "input_dim": 20,
+      "sequence_length": 7,
+      "feature_schema": {
+        "year": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "month": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "dayofweek": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_weekend": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "season": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "region": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "latitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "longitude": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "elevation": {
+          "type": "numerical",
+          "group": "spatial",
+          "weight": 1.0,
+          "unit": "m",
+          "missing": 0.0
+        },
+        "tmin": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tmax": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "tavg": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "prcp": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 3.0,
+          "unit": "mm",
+          "missing": 0.0
+        },
+        "wspd": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "km/h",
+          "missing": 0.0
+        },
+        "humidity": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "pressure": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 2.0,
+          "unit": "hPa",
+          "missing": 0.0
+        },
+        "dew_point": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 1.0,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "cloud_cover": {
+          "type": "numerical",
+          "group": "primary",
+          "weight": 1.5,
+          "unit": "%",
+          "missing": 0.0
+        },
+        "visibility": {
+          "type": "numerical",
+          "group": "secondary",
+          "weight": 0.8,
+          "unit": "km",
+          "missing": 1.0
+        },
+        "temp_range": {
+          "type": "numerical",
+          "group": "context",
+          "weight": 0.1,
+          "unit": "\u00b0C",
+          "missing": 0.0
+        },
+        "is_hot_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "is_cold_day": {
+          "type": "numerical",
+          "group": "unknown",
+          "weight": 1.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "rainfall_intensity": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        },
+        "wind_category": {
+          "type": "categorical",
+          "group": "unknown",
+          "weight": 0.0,
+          "unit": "",
+          "missing": 0.0
+        }
+      },
+      "train_date_start": "2014-01-01",
+      "train_date_end": "2022-10-19",
+      "val_date_start": "2022-10-20",
+      "val_date_end": "2024-12-31",
+      "dataset_sha256": "9e6083c5ce2c22854927619040063c15033e0efef00832975e3b1687fea8ea40",
+      "dataset_path": ".\\backend\\data\\pakistan_weather_2000_2024.csv",
+      "n_train": 3214,
+      "n_val": 804,
+      "ae_val_loss": 0.181504,
+      "lstm_val_loss": 0.204391,
+      "ae_threshold_p99": 0.614,
+      "epochs_ae": 46,
+      "epochs_lstm": 107,
+      "hyperparameters": {
+        "ae_encoder_dims": [
+          64,
+          32,
+          16
+        ],
+        "ae_latent_dim": 8,
+        "lstm_units_1": 64,
+        "lstm_units_2": 32,
+        "attention_units": 32,
+        "dropout_rate": 0.2,
+        "ae_weight": 0.55,
+        "lstm_weight": 0.45,
+        "batch_size": 64,
+        "max_epochs": 150,
+        "ae_lr": 0.001,
+        "lstm_lr": 0.0005,
+        "val_split": 0.2,
+        "seed": 42
+      },
+      "metrics": {
+        "ae_val_loss_best": 0.18150414526462555,
+        "lstm_val_loss_best": 0.204391211271286
+      },
+      "calibration_params": {
+        "ae_mean": 0.16874975754067065,
+        "ae_std": 0.14213338220540342,
+        "ae_p99": 0.6139998683257081,
+        "lstm_mean": 0.1772705936129848,
+        "lstm_std": 0.3348253002691479,
+        "lstm_p99": 0.908621817165815
+      },
+      "notes": "Trained with 10 numerical features."
+    }
+  ]
+}

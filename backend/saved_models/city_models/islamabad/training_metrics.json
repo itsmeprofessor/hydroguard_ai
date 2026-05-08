@@ -1,0 +1,18 @@
+{
+  "city_slug": "islamabad",
+  "model_version": "islamabad-v20260508-152600",
+  "git_commit": "16cf128",
+  "trained_at": "2026-05-08T15:26:00.579525+00:00",
+  "training_rows": 7305,
+  "val_rows": 913,
+  "cal_rows": 914,
+  "input_dim": 29,
+  "ae_val_loss": 0.2984127998352051,
+  "tcn_val_loss": 0.2800461947917938,
+  "lgbm_val_auc": 0.8322,
+  "lgbm_val_brier": 0.0658,
+  "calibration_ece": 0.0,
+  "calibration_brier": 0.03374,
+  "duration_seconds": 220.8,
+  "positive_label_rate": 0.175054704595186
+}

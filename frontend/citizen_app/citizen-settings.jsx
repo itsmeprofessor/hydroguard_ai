@@ -349,7 +349,15 @@ const SettingsScreen = ({ prefs, setPrefs, scenario }) => {
         </SettingsGroup>
 
         {/* Sign out */}
-        <button className="set-signout">
+        <button
+          className="set-signout"
+          onClick={() => {
+            ["hg-tab", "hg-city", "hg-theme", "hg-prefs"].forEach(function(k) {
+              localStorage.removeItem(k);
+            });
+            window.location.reload();
+          }}
+        >
           <CIcon name="logOut" size={16}/>Sign out
         </button>
 
