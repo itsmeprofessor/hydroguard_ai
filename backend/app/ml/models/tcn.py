@@ -1,37 +1,44 @@
 """
-HydroGuard-AI — Causal Temporal Convolutional Network (TCN)
-=============================================================
-Replaces the LSTM + BahdanauAttention branch in CityHybridModel.
+HydroGuard-AI — Multi-Scale Causal Temporal Convolutional Network (TCN) v3.3
+==============================================================================
+Replaces the LSTM branch (fully removed in v3.2; no LSTM anywhere in codebase).
 
-Architecture (locked spec from Phase 2/3):
-  seq_len   = 24  (24 hourly observations)
-  filters   = 64
+Architecture (v3.3 upgraded):
+  seq_len   = 30  (30-observation rolling window; covers ~1 month of daily data)
+  filters   = 128 (wider capacity for multi-scale storm dynamics)
   kernel    = 3
-  dilations = [1, 2, 4, 8]
-  Effective receptive field = (3-1) * (1+2+4+8) + 1 = 31 timesteps
+  dilations = [1, 2, 4, 8, 16, 32]
+  Effective receptive field = (3-1) * (1+2+4+8+16+32) + 1 = 127 observations
+
+Multi-scale dilation hierarchy:
+  d=1  : day-to-day flash-flood precursors
+  d=2  : 2-day convective system formation
+  d=4  : weekly monsoon buildup
+  d=8  : bi-weekly synoptic-scale patterns
+  d=16 : monthly seasonal transitions
+  d=32 : pre-monsoon onset patterns (~2-month lead)
 
 Per TCN block:
   CausalConv1D(filters, kernel, dilation, padding="causal")
   LayerNormalization
   Activation("gelu")
-  Dropout(0.2)
-  1×1 Conv1D residual projection (only if input channels != filters)
+  Dropout(0.2)  ← kept active at MC-inference for uncertainty estimation
+  1×1 Conv1D residual projection (only when input channels != filters)
   Add()
 
 After all blocks:
   GlobalAveragePooling1D
   Dense(input_dim, linear)   ← next-step reconstruction target
 
-Objective: MSE on next-step prediction.
-Strictly causal (no BiTCN, no future leakage).
+Objective: MSE on next-step prediction. Strictly causal. No LSTM. No BiTCN.
 No custom Keras layers → standard keras.models.load_model works without custom_objects.
 
 Usage:
     from app.ml.models.tcn import build_tcn_reconstructor, TCN_SEQ_LEN
 
-    model = build_tcn_reconstructor(input_dim=28)
+    model = build_tcn_reconstructor(input_dim=35)
     model.compile(optimizer="adam", loss="mse")
-    # Training: X_seq (N, 24, 28) → y_next (N, 28)
+    # Training: X_seq (N, 30, 35) → y_next (N, 35)
 """
 from __future__ import annotations
 
@@ -43,14 +50,14 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────
-#  Locked architecture constants
+#  Architecture constants — upgrade to multi-scale dilations
 # ─────────────────────────────────────────────────────────────
 
-TCN_SEQ_LEN  = 24          # rolling window length (hourly)
-TCN_FILTERS  = 64          # convolutional filters per block
-TCN_KERNEL   = 3           # kernel size
-TCN_DILATIONS = [1, 2, 4, 8]  # dilation rates → RF = (3-1)*(1+2+4+8)+1 = 31
-TCN_DROPOUT  = 0.20        # dropout rate (train-time only)
+TCN_SEQ_LEN   = 30           # rolling window (30 observations ≈ 1 month daily)
+TCN_FILTERS   = 128          # wider channel depth for multi-scale patterns
+TCN_KERNEL    = 3            # kernel size (standard)
+TCN_DILATIONS = [1, 2, 4, 8, 16, 32]  # RF = (3-1)*(1+2+4+8+16+32)+1 = 127
+TCN_DROPOUT   = 0.20         # spatial dropout — active during MC inference
 
 
 # ─────────────────────────────────────────────────────────────

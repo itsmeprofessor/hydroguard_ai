@@ -261,6 +261,19 @@ def create_app() -> FastAPI:
             return FileResponse(str(index))
         return JSONResponse({"error": "Citizen app not found"}, status_code=404)
 
+    # ── Flutter citizen app static mount ──────────────────────────────────────
+    flutter_dir = STATIC_DIR.parent.parent / "citizen_flutter_app" / "build" / "web"
+    if flutter_dir.exists():
+        app.mount("/flutter", StaticFiles(directory=str(flutter_dir), html=True), name="flutter")
+        logger.info("Flutter citizen app mounted at /flutter")
+
+    @app.get("/flutter-app", include_in_schema=False)
+    async def serve_flutter():
+        index = flutter_dir / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
+        return JSONResponse({"error": "Flutter app not built — run: flutter build web"}, status_code=404)
+
     return app
 
 

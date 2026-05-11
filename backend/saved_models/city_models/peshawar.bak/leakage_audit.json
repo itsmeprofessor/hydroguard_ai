@@ -1,0 +1,76 @@
+{
+  "city_slug": "peshawar",
+  "audited_at": "2026-05-08T21:49:51.487165+00:00",
+  "total_score": 0.0,
+  "category": "LOW",
+  "abort": false,
+  "findings": [
+    {
+      "category": "temporal_overlap",
+      "severity": "CLEAN",
+      "score_delta": 0.0,
+      "details": {
+        "overlap_days": 0
+      },
+      "message": "Train and val date sets are disjoint."
+    },
+    {
+      "category": "anchor_leakage",
+      "severity": "CLEAN",
+      "score_delta": 0.0,
+      "details": {
+        "events_checked": 4
+      },
+      "message": "All event anchor windows are isolated to one split."
+    },
+    {
+      "category": "sequence_overlap",
+      "severity": "CLEAN",
+      "score_delta": 0.0,
+      "details": {
+        "train_max": "2011-03-14",
+        "val_min": "2011-03-15",
+        "gap_days": 1
+      },
+      "message": "Sequence gap between train end and val start: 1 day(s)."
+    },
+    {
+      "category": "high_similarity",
+      "severity": "CLEAN",
+      "score_delta": 0.0,
+      "details": {
+        "mean_max_cosine": 0.9178
+      },
+      "message": "Positive sample similarity is acceptable (mean=0.918)."
+    },
+    {
+      "category": "future_feature_leakage",
+      "severity": "CLEAN",
+      "score_delta": 0.0,
+      "details": {
+        "n_features_checked": 35
+      },
+      "message": "All features pass causal pattern check."
+    },
+    {
+      "category": "duplicate_hashes",
+      "severity": "CLEAN",
+      "score_delta": 0.0,
+      "details": {
+        "n_duplicates": 0
+      },
+      "message": "No significant duplicate sequences (0 minor matches)."
+    }
+  ],
+  "summary": {
+    "city_slug": "peshawar",
+    "train_rows": 4091,
+    "val_rows": 511,
+    "train_pos": 398,
+    "val_pos": 41,
+    "train_date_span": "2000-01-01 to 2011-03-14",
+    "val_date_span": "2011-03-15 to 2012-08-06",
+    "n_features": 35,
+    "seq_len": 30
+  }
+}

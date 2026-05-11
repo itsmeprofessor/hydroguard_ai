@@ -75,7 +75,7 @@ class WeatherInput(BaseModel):
 class CityTrainRequest(BaseModel):
     epochs:     int  = Field(150, ge=1, le=500)
     batch_size: int  = Field(64,  ge=8, le=512)
-    use_lstm:   bool = True
+    use_tcn:    bool = True   # LSTM removed; TCN is the temporal branch
 
 
 class PredictionResponse(BaseModel):
@@ -86,7 +86,7 @@ class PredictionResponse(BaseModel):
     confidence:    float
     is_anomaly:    bool
     ae_score:      float
-    lstm_score:    float
+    tcn_score:     float      # renamed from lstm_score (LSTM removed in v3.2)
     hri_score:     int
     source:        str
     timestamp:     str
@@ -97,15 +97,34 @@ class PredictionResponse(BaseModel):
 #  Helpers
 # ──────────────────────────────────────────────────────────
 
+_UNKNOWN_CITY_CACHE: set = set()  # slugs confirmed not in registry; cleared on refresh
+
+
 def _validate_city(city: str) -> str:
-    """Resolve `city` to a valid slug or raise 404."""
+    """Resolve `city` to a valid slug or raise 404.
+
+    The registry refresh (disk + CSV scan) only fires when the slug is not
+    already in the registry AND has not already been checked since the last
+    refresh — preventing unbounded disk I/O from unknown-city flood requests.
+    """
     slug = _slug(city)
     if slug in city_model_service.list_slugs():
         return slug
-    # If not in registry, try a refresh (perhaps a new city was added)
+    if slug in _UNKNOWN_CITY_CACHE:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"City '{city}' not found. Use GET /cities to list valid cities. "
+                f"If you've just added a new city to the dataset, call "
+                f"POST /cities/refresh as an admin to rescan."
+            ),
+        )
+    # First time seeing this slug — do one refresh to catch newly added cities
     city_model_service.refresh_registry()
+    _UNKNOWN_CITY_CACHE.clear()  # registry changed; old negatives may be stale
     if slug in city_model_service.list_slugs():
         return slug
+    _UNKNOWN_CITY_CACHE.add(slug)
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=(
@@ -212,6 +231,7 @@ async def list_cities():
 @router.post("/refresh", response_model=Dict[str, Any])
 async def refresh_registry(_admin=Depends(require_admin)):
     """Rescan dataset CSV + on-disk models for new cities (Admin)."""
+    _UNKNOWN_CITY_CACHE.clear()
     registry = city_model_service.refresh_registry()
     status_info = city_model_service.model_status()
     return {
@@ -421,10 +441,12 @@ async def city_train(
         try:
             from scripts.train_city import train_one_city
             train_one_city(
-                city_slug=slug,
-                epochs=body.epochs,
-                batch_size=body.batch_size,
-                use_lstm=body.use_lstm,
+                slug      = slug,
+                df_city   = None,   # train_one_city loads its own data
+                models_dir= None,   # uses default models directory
+                epochs    = body.epochs,
+                batch_size= body.batch_size,
+                use_tcn   = body.use_tcn,
             )
             logger.info("[%s] Background training completed", slug)
         except Exception as exc:

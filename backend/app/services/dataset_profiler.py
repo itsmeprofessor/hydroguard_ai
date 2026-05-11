@@ -413,9 +413,9 @@ class DatasetProfiler:
             seq_len = 7
 
         # Model type heuristic
-        model_type = "ae_lstm_attention"  # default full hybrid
+        model_type = "ae_tcn_fusion"  # default full hybrid
         if n_rows < 500:
-            model_type = "ae_only"        # too little data for LSTM
+            model_type = "ae_only"        # too little data for TCN
 
         # Suggested epochs based on dataset size
         epochs = min(max(int(n_rows / 100), 50), 200)
@@ -424,7 +424,7 @@ class DatasetProfiler:
             "suggested_sequence_length": seq_len,
             "suggested_model_type":      model_type,
             "suggested_epochs":          epochs,
-            "can_train_lstm":            n_rows >= 500,
+            "can_train_tcn":            n_rows >= 500,
             "has_supervised_labels":     has_labels,
             "n_features":                n_features,
             "n_cities":                  n_cities,
@@ -432,7 +432,7 @@ class DatasetProfiler:
                 "Supervised fusion recommended — use flood event labels "
                 "to replace heuristic score mixing."
                 if has_labels else
-                "Unsupervised AE+LSTM reconstruction scoring. "
+                "Unsupervised AE+TCN reconstruction scoring. "
                 "Add flood/cloudburst labels to enable supervised fusion."
             ),
         }

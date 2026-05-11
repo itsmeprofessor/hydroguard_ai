@@ -150,7 +150,28 @@
       "Bash(python -m pytest tests/test_labeling.py tests/test_calibration.py tests/test_drift_simulation.py tests/test_api.py --tb=short -q)",
       "Bash(python -m pytest --tb=short -q --ignore=tests/test_load.py)",
       "Bash(python -m pytest tests/ -q --ignore=tests/test_load.py)",
-      "Bash(git -C D:/Programming/FYP/hydroguard_ai show HEAD:backend/app/ml/models/attention.py)"
+      "Bash(git -C D:/Programming/FYP/hydroguard_ai show HEAD:backend/app/ml/models/attention.py)",
+      "Bash(python *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\zainm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Programming-FYP-hydroguard-ai\\\\71077ad5-c085-46a1-97f7-af0dfb07fd48\\\\tasks\\\\bmlpble04.output\" -Wait)",
+      "Bash(Select-String --line-buffered \"INFO train_city|ERROR train_city|WARNING train_city|SUMMARY|val_AUC|AUC=|Traceback|UnicodeError|METRICS GATE|Done|failed\")",
+      "Bash(Get-Content *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell($lines = Get-Content \"C:\\\\Users\\\\zainm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Programming-FYP-hydroguard-ai\\\\71077ad5-c085-46a1-97f7-af0dfb07fd48\\\\tasks\\\\bmlpble04.output\"; Write-Host \"Total lines: $\\($lines.Count\\)\"; $lines | Select-Object -Last 20)",
+      "PowerShell($lines = Get-Content \"C:\\\\Users\\\\zainm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Programming-FYP-hydroguard-ai\\\\71077ad5-c085-46a1-97f7-af0dfb07fd48\\\\tasks\\\\bmlpble04.output\"; Write-Host \"Total lines: $\\($lines.Count\\)\"; $lines | Select-Object -Last 30)",
+      "PowerShell($lines = Get-Content \"C:\\\\Users\\\\zainm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Programming-FYP-hydroguard-ai\\\\71077ad5-c085-46a1-97f7-af0dfb07fd48\\\\tasks\\\\bmlpble04.output\"; Write-Host \"Total lines: $\\($lines.Count\\)\"; $lines | Select-Object -Last 60)",
+      "PowerShell($lines = Get-Content \"C:\\\\Users\\\\zainm\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Programming-FYP-hydroguard-ai\\\\71077ad5-c085-46a1-97f7-af0dfb07fd48\\\\tasks\\\\bbarcrmqu.output\"; Write-Host \"Total lines: $\\($lines.Count\\)\"; $lines | Select-Object -Last 25)",
+      "PowerShell(New-Item *)",
+      "Bash(flutter create *)",
+      "Bash(flutter run *)",
+      "Bash(flutter analyze *)",
+      "Bash(Select-String -Pattern \"error|warning\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\zainm\\\\Downloads\\\\Hydroguard App\" -Recurse -Force)",
+      "Bash(Select-Object FullName, Length, Extension)",
+      "Bash(ConvertTo-Json)",
+      "Bash(Get-ChildItem -Recurse \"D:\\\\Programming\\\\FYP\\\\hydroguard_ai\\\\frontend\\\\citizen_flutter_app\\\\lib\")",
+      "Bash(Select-Object FullName)",
+      "Bash(flutter pub *)",
+      "Bash(flutter build *)"
     ]
   }
 }

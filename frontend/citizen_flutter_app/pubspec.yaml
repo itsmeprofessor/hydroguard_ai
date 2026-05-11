@@ -1,0 +1,46 @@
+name: hydroguard_citizen
+description: HydroGuard AI – Citizen flood early-warning app for Pakistan (v2)
+publish_to: 'none'
+version: 2.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Networking
+  dio: ^5.4.3
+
+  # Routing
+  go_router: ^13.2.4
+
+  # Secure token storage
+  flutter_secure_storage: ^9.2.2
+
+  # Local preferences
+  shared_preferences: ^2.3.0
+
+  # Animations
+  flutter_animate: ^4.5.0
+
+  # Date formatting
+  intl: ^0.19.0
+
+  # Phone calls / links
+  url_launcher: ^6.3.0
+
+  # Google Fonts (Inter)
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

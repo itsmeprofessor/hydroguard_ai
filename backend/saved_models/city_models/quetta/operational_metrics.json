@@ -1,0 +1,75 @@
+{
+  "city_slug": "quetta",
+  "n_observations": 731,
+  "alert_threshold": 0.5,
+  "precision_top1": {
+    "k_pct": 0.01,
+    "n_top": 7,
+    "precision": 1.0,
+    "n_true_pos": 7
+  },
+  "precision_top5": {
+    "k_pct": 0.05,
+    "n_top": 36,
+    "precision": 0.9167,
+    "n_true_pos": 33
+  },
+  "precision_top10": {
+    "k_pct": 0.1,
+    "n_top": 73,
+    "precision": 0.4658,
+    "n_true_pos": 34
+  },
+  "event_recall": {
+    "n_events": 0,
+    "n_detected": 0,
+    "recall": 0.0,
+    "missed_events": [],
+    "detected_events": []
+  },
+  "lead_time": {
+    "n_events_with_lead": 0,
+    "mean_days": 0.0,
+    "median_days": 0.0,
+    "p90_days": 0.0,
+    "max_days": 0.0,
+    "by_event": {}
+  },
+  "false_alarm": {
+    "false_alarms": 4,
+    "total_alerts": 37,
+    "far_per_100": 10.81,
+    "by_month": {
+      "1": 0.0,
+      "2": 0.0,
+      "3": 0.0,
+      "4": 16.67,
+      "5": 0.0,
+      "6": 0.0,
+      "7": 100.0,
+      "8": 33.33,
+      "9": 100.0,
+      "10": 0.0,
+      "11": 0.0,
+      "12": 0.0
+    },
+    "by_season": {
+      "Winter": 0.0,
+      "Spring": 5.88,
+      "Monsoon": 60.0,
+      "Autumn": 0.0
+    }
+  },
+  "alert_stability": {
+    "oscillation_count": 50,
+    "volatility_score": 0.0685,
+    "n_single_day_spikes": 18
+  },
+  "persistence": {
+    "n_events_assessed": 0,
+    "mean_persistence": 0.0,
+    "median_persistence": 0.0,
+    "p10_persistence": 0.0,
+    "by_event": {}
+  }
+}

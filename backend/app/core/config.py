@@ -136,7 +136,7 @@ def validate_startup_secrets(strict: bool = True) -> list[str]:
 
 
 # ============================================================
-#  Hybrid LSTM warm-up
+#  TCN buffer warm-up (seeds the rolling window with historical data)
 # ============================================================
 
 HYBRID_WARMUP_ENABLED:      bool = os.getenv("HYBRID_WARMUP", "true").lower() in ("true", "1", "yes")
@@ -201,7 +201,7 @@ _NORMALISED_FEATURE_WEIGHTS: dict[str, float] = {
 # ============================================================
 
 class ModelConfig:
-    """Autoencoder + LSTM configuration — flood-signal-weighted."""
+    """Model configuration — flood-signal-weighted. TCN replaces LSTM (v3.2+)."""
 
     PRIMARY_FEATURES:   list[str] = ["prcp", "humidity", "pressure", "cloud_cover"]
     SECONDARY_FEATURES: list[str] = ["dew_point", "wspd"]
@@ -218,8 +218,8 @@ class ModelConfig:
     HIDDEN_LAYERS:  list  = [64, 32, 16]  # Aligned with city_hybrid.py
     DROPOUT_RATE:   float = 0.2
 
-    LSTM_UNITS:      int = 64
-    SEQUENCE_LENGTH: int = 7
+    # TCN sequence length is defined in app/ml/models/tcn.py::TCN_SEQ_LEN (= 30)
+    # LSTM is fully removed from v3.2 onward — no LSTM references remain.
 
     BATCH_SIZE:                int   = int(os.getenv("MODEL_BATCH_SIZE", "64"))
     EPOCHS:                    int   = int(os.getenv("MODEL_EPOCHS",     "100"))

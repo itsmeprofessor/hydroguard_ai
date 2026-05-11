@@ -81,7 +81,8 @@ class BatchWeatherInput(BaseModel):
 
 class TrainingRequest(BaseModel):
     data_path:  Optional[str] = Field(None, description="Path to training CSV")
-    use_lstm:   bool          = Field(True)
+    use_tcn:    bool          = Field(True, description="Use TCN temporal branch (LSTM removed)")
+    use_lstm:   bool          = Field(True, description="Deprecated — alias for use_tcn")
     epochs:     Optional[int] = Field(None, ge=1, le=1000)
     batch_size: Optional[int] = Field(None, ge=1, le=512)
 

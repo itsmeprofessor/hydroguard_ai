@@ -1,0 +1,81 @@
+{
+  "city_slug": "lahore",
+  "n_observations": 731,
+  "alert_threshold": 0.5,
+  "precision_top1": {
+    "k_pct": 0.01,
+    "n_top": 7,
+    "precision": 1.0,
+    "n_true_pos": 7
+  },
+  "precision_top5": {
+    "k_pct": 0.05,
+    "n_top": 36,
+    "precision": 0.9167,
+    "n_true_pos": 33
+  },
+  "precision_top10": {
+    "k_pct": 0.1,
+    "n_top": 73,
+    "precision": 0.8082,
+    "n_true_pos": 59
+  },
+  "event_recall": {
+    "n_events": 1,
+    "n_detected": 1,
+    "recall": 1.0,
+    "missed_events": [],
+    "detected_events": [
+      "2023-07-10"
+    ]
+  },
+  "lead_time": {
+    "n_events_with_lead": 1,
+    "mean_days": 5.0,
+    "median_days": 5.0,
+    "p90_days": 5.0,
+    "max_days": 5.0,
+    "by_event": {
+      "2023-07-10": 5.0
+    }
+  },
+  "false_alarm": {
+    "false_alarms": 23,
+    "total_alerts": 101,
+    "far_per_100": 22.77,
+    "by_month": {
+      "1": 13.79,
+      "2": 40.0,
+      "3": 0.0,
+      "4": 0.0,
+      "5": 0.0,
+      "6": 0.0,
+      "7": 20.0,
+      "8": 11.11,
+      "9": 50.0,
+      "10": 0.0,
+      "11": 60.0,
+      "12": 33.33
+    },
+    "by_season": {
+      "Winter": 20.93,
+      "Spring": 0.0,
+      "Monsoon": 23.91,
+      "Autumn": 37.5
+    }
+  },
+  "alert_stability": {
+    "oscillation_count": 91,
+    "volatility_score": 0.1247,
+    "n_single_day_spikes": 21
+  },
+  "persistence": {
+    "n_events_assessed": 1,
+    "mean_persistence": 5.0,
+    "median_persistence": 5.0,
+    "p10_persistence": 5.0,
+    "by_event": {
+      "2023-07-10": 5.0
+    }
+  }
+}

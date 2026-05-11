@@ -8,7 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from app.api.deps import require_admin
 from app.schemas.v2 import (
-    WeatherInputV2, PredictionResponseV2, CitiesListV2, CityStatusV2,
+    WeatherInputV2, CityPredictBody, PredictionResponseV2, CitiesListV2, CityStatusV2,
     TrainingRequestV2, TrainingRunResponseV2,
 )
 from app.services.city_model_service import city_model_service, _slug, _display_name
@@ -85,16 +85,19 @@ async def city_risk(city: str):
 @router.post("/{city}/predict", response_model=PredictionResponseV2)
 async def predict_city(
     city:    str,
-    weather: WeatherInputV2,
+    weather: CityPredictBody,
     background_tasks: BackgroundTasks,
     request: Request,
 ):
-    """Submit weather data and get a v2 probabilistic prediction."""
+    """Submit weather data and get a v2 probabilistic prediction.
+    City is taken from the URL path; all body fields are optional and
+    fall back to climatological defaults when omitted.
+    """
     slug = _slug(city)
     if not city_model_service.is_known_city(slug):
         raise HTTPException(404, f"City '{city}' not found.")
 
-    raw = weather.model_dump(exclude_none=False)
+    raw = {k: v for k, v in weather.model_dump().items() if v is not None}
     result = await city_model_service.predict_v2(
         city_slug   = slug,
         raw_weather = raw,

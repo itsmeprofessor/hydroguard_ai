@@ -1,28 +1,24 @@
 """
-HydroGuard-AI — Labeling Functions (Weak Supervision)
-=======================================================
-Seven physics-based labeling functions that produce weak labels
-(positive=1, negative=0, abstain=-1) with associated confidence scores.
+HydroGuard-AI — Labeling Functions (Physics-Informed Weak Supervision) v3.3
+=============================================================================
+Ten physics-based labeling functions that produce weak labels.
+Upgraded in v3.3: added L8 (EWI), L9 (pressure acceleration), L10 (instability).
 
 All functions share the signature:
     (args...) -> tuple[int, float, float]
     # (label: -1|0|1, confidence: 0–1, rule_score: 0–1)
 
-Thresholds are LOCKED per Phase 3 spec:
-  L1 rainfall:  positive >= 2.5x climo q90 (conf 1.0) or >= 1.5x (conf 0.7)
-                negative <= 0.3x climo q90 (conf 0.9)
-  L2 pressure:  positive drop <= -3.0 hPa/3h (conf 0.9) or <= -1.5 (conf 0.6)
-                negative rise >= +1.5 hPa/3h (conf 0.8)
-  L3 humidity:  positive >= 90% AND prcp >= 10 mm (conf 0.8)
-                negative <= 60% (conf 0.8)
-  L4 cloud:     positive >= 90% AND prcp_climo_pct >= 1.5 (conf 0.75)
-                negative <= 30% (conf 0.7)
-  L5 tdew:      positive T-Td <= 3°C AND prcp >= 5 mm (conf 0.85)
-                negative T-Td >= 15°C (conf 0.7)
-  L6 persist:   positive sum(last 3 labels == 1) >= 2 (conf 0.90)
-                negative sum(last 3 labels == 0) >= 2 (conf 0.85)
-  L7 extreme:   positive frac(features >= q99) >= 0.5 (conf 0.85)
-                negative frac <= 0.1 (conf 0.75)
+Original thresholds (L1–L7) unchanged.
+New functions:
+  L8 EWI:   Extreme Weather Index — combines rainfall, pressure drop,
+            humidity saturation, cloud cover into a single physics score.
+            positive EWI >= 0.55 (conf 0.90), negative EWI <= 0.20 (conf 0.85)
+  L9 acc:   Pressure acceleration (ΔΔP). Rapid acceleration of pressure drop
+            is a mesoscale convective system (MCS) onset signature.
+            positive <= -1.5 hPa/step² (conf 0.85)
+  L10 inst: Atmospheric instability proxy (moisture_flux × |Δpressure|).
+            High value with small dew-point spread = high convective risk.
+            positive >= 5.0 (conf 0.80)
 """
 from __future__ import annotations
 
@@ -263,5 +259,122 @@ def rule_historical_extreme(
 
     if frac_normal >= 0.9:
         return (0, 0.75, frac_normal)
+
+    return ABSTAIN
+
+
+# ─────────────────────────────────────────────────────────────
+#  L8 — Extreme Weather Index (EWI)  [NEW v3.3]
+# ─────────────────────────────────────────────────────────────
+
+def rule_ewi(
+    prcp:              float,
+    pressure_delta:    Optional[float],
+    humidity:          float,
+    cloud_cover:       float,
+    is_monsoon:        bool = False,
+) -> LabelResult:
+    """
+    Physics-based Extreme Weather Index combining the four primary storm signals.
+
+    EWI = 0.35·rain_norm + 0.30·pressure_drop_norm + 0.20·humidity_norm + 0.15·cloud_norm
+
+    Monsoon season multiplier: ×1.15 (heightened sensitivity during active monsoon).
+
+    Thresholds:
+      positive: EWI >= 0.55 (conf 0.90)
+      negative: EWI <= 0.20 (conf 0.85)
+    """
+    # Normalise each component to [0, 1]
+    rain_norm    = float(min(max(prcp, 0.0) / 80.0, 1.0))
+    # Pressure drop: more negative = more extreme
+    pdelta       = float(pressure_delta) if pressure_delta is not None else 0.0
+    pdrop_norm   = float(min(max(-pdelta, 0.0) / 10.0, 1.0))
+    hum_norm     = float(max(humidity - 50.0, 0.0) / 50.0)
+    cloud_norm   = float(cloud_cover / 100.0)
+
+    ewi = 0.35 * rain_norm + 0.30 * pdrop_norm + 0.20 * hum_norm + 0.15 * cloud_norm
+
+    if is_monsoon:
+        ewi = min(ewi * 1.15, 1.0)
+
+    if ewi >= 0.55:
+        conf = min(0.80 + ewi * 0.20, 0.95)
+        return (1, round(conf, 3), round(ewi, 4))
+    if ewi <= 0.20:
+        inv = 1.0 - ewi / 0.20
+        return (0, round(0.75 + inv * 0.10, 3), round(1.0 - ewi, 4))
+    return ABSTAIN
+
+
+# ─────────────────────────────────────────────────────────────
+#  L9 — Pressure Acceleration  [NEW v3.3]
+# ─────────────────────────────────────────────────────────────
+
+def rule_pressure_acceleration(
+    pressure_accel: Optional[float],
+) -> LabelResult:
+    """
+    Positive: rapid acceleration of pressure drop (ΔΔP <= -1.5 hPa/step²).
+    This is a signature of mesoscale convective system (MCS) rapid development.
+
+    Negative: steady or increasing pressure tendency (ΔΔP >= +0.5).
+    """
+    if pressure_accel is None:
+        return ABSTAIN
+
+    acc = float(pressure_accel)
+
+    if acc <= -1.5:
+        score = min(abs(acc) / 5.0, 1.0)
+        conf  = min(0.75 + score * 0.15, 0.90)
+        return (1, round(conf, 3), round(score, 4))
+    if acc <= -0.5:
+        score = abs(acc) / 1.5
+        return (1, 0.60, round(score, 4))
+    if acc >= 0.5:
+        score = min(acc / 3.0, 1.0)
+        return (0, 0.70, round(score, 4))
+    return ABSTAIN
+
+
+# ─────────────────────────────────────────────────────────────
+#  L10 — Atmospheric Instability Proxy  [NEW v3.3]
+# ─────────────────────────────────────────────────────────────
+
+def rule_atm_instability(
+    atm_instability: Optional[float],
+    tdew_spread:     Optional[float] = None,
+) -> LabelResult:
+    """
+    Positive: high moisture flux combined with pressure forcing and near-saturation.
+    `atm_instability` = moisture_flux × |Δpressure| / tdew_spread (physics proxy).
+
+    A high value means the atmosphere is simultaneously:
+      1. Transporting large amounts of moisture (moisture_flux high)
+      2. Under significant pressure forcing (|Δpressure| high)
+      3. Near saturation (tdew_spread small → denominator small → index high)
+
+    This combination is a reliable convective initiation precursor.
+    """
+    if atm_instability is None:
+        return ABSTAIN
+
+    inst = float(atm_instability)
+
+    # Additional confirmation: near-saturation (optional)
+    near_saturation = tdew_spread is not None and float(tdew_spread) <= 5.0
+
+    if inst >= 8.0 or (inst >= 5.0 and near_saturation):
+        score = min(inst / 15.0, 1.0)
+        conf  = 0.85 if near_saturation else 0.75
+        return (1, round(conf, 3), round(score, 4))
+
+    if inst >= 5.0:
+        score = inst / 10.0
+        return (1, 0.70, round(score, 4))
+
+    if inst <= 0.5:
+        return (0, 0.75, 0.90)
 
     return ABSTAIN

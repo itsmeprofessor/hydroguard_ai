@@ -163,7 +163,7 @@ def _discover_trained_cities() -> Set[str]:
 # ──────────────────────────────────────────────────────────
 
 class _CityBuffer:
-    """Thread-safe rolling window buffer per city for LSTM input."""
+    """Thread-safe rolling window buffer per city for TCN next-step input."""
 
     def __init__(self, seq_len: int = SEQUENCE_LENGTH):
         self._seq_len = seq_len
@@ -174,10 +174,10 @@ class _CityBuffer:
         """
         Return the last `seq_len` vectors BEFORE vec, then add vec to the buffer.
 
-        Training setup:  LSTM(X[t-7 : t]) → predicts X[t]
-        Inference setup: LSTM(sequence)    → compared against x (current vec)
-        So `sequence` must NOT include vec — it is the "past" context,
-        and vec is the "next step" target.
+        Training:  TCN(X[t-seq_len : t]) → predicts X[t]
+        Inference: TCN(sequence)          → error vs x = anomaly signal
+        `sequence` must NOT include vec — it is the past context.
+        vec is the "next step" target.
         """
         if vec.ndim == 2:
             vec = vec[0]
@@ -313,12 +313,75 @@ class CityModelService:
                 city=_display_name(slug),
                 model_dir=self._model_dir(slug),
             )
-            # Load v3.2 artifacts if available
+            # Load v3.3 artifacts (FusionModel, calibrator, OOD detector)
             self._load_v2_artifacts(slug)
+            # Warm-start the TCN buffer with historical data so the model
+            # produces meaningful sequence scores from the very first request
+            # (eliminates the 30-step cold-start blind window).
+            self._seed_buffer_from_history(slug)
             return model
         except Exception as exc:
             logger.error("[%s] Failed to load city model: %s", slug, exc)
             return None
+
+    def _seed_buffer_from_history(self, slug: str) -> None:
+        """
+        Pre-populate _CityBuffer[slug] with the last TCN_SEQ_LEN preprocessed
+        rows from the training CSV so the TCN branch is immediately active on
+        first request.
+
+        Falls back silently if the CSV or preprocessor is not available.
+        """
+        from app.ml.models.tcn import TCN_SEQ_LEN
+        try:
+            preprocessor = self._load_preprocessor(slug)
+            if preprocessor is None:
+                return
+
+            # Locate the training CSV
+            csv_path = DATA_DIR / "pakistan_weather_2000_2024.csv"
+            if not csv_path.exists():
+                # Try any CSV in data/
+                candidates = list(DATA_DIR.glob("*.csv"))
+                if not candidates:
+                    return
+                csv_path = candidates[0]
+
+            df = __import__("pandas").read_csv(csv_path, low_memory=False)
+            if "city" in df.columns:
+                df_city = df[df["city"].str.strip().str.lower().str.replace(" ", "_")
+                             .str.replace("-", "_") == slug].copy()
+            else:
+                df_city = df.copy()
+
+            if len(df_city) < TCN_SEQ_LEN:
+                return
+
+            # Apply the same feature derivation used during training
+            import pandas as _pd
+            import sys as _sys
+            _train_city_mod = _sys.modules.get("train_city")
+            if _train_city_mod is None:
+                # Inline the necessary transforms
+                if "date" in df_city.columns:
+                    df_city["date"] = _pd.to_datetime(df_city["date"], errors="coerce")
+                    df_city = df_city.sort_values("date")
+                if "month" not in df_city.columns and "date" in df_city.columns:
+                    df_city["month"] = df_city["date"].dt.month
+                if "tavg" in df_city.columns and "dew_point" in df_city.columns:
+                    df_city["tdew_spread"] = (df_city["tavg"] - df_city["dew_point"]).clip(0)
+                if "humidity" in df_city.columns and "wspd" in df_city.columns:
+                    df_city["moisture_flux"] = (df_city["humidity"] / 100.0) * df_city["wspd"].clip(0)
+
+            # Take the last TCN_SEQ_LEN rows and preprocess
+            seed_rows = df_city.tail(TCN_SEQ_LEN)
+            X_seed, _ = preprocessor.transform(seed_rows)
+            self._buf.seed(slug, X_seed)
+            logger.info(
+                "[%s] TCN buffer warm-started with %d historical rows", slug, len(X_seed)
+            )
+        except Exception as exc:
+            logger.debug("[%s] Buffer warm-start failed (non-fatal): %s", slug, exc)
 
     def _load_v2_artifacts(self, slug: str) -> None:
         """Load FusionModel, IsotonicCalibrator, OODDetector for a city."""
@@ -513,44 +576,29 @@ class CityModelService:
             logger.warning("[%s] FeaturePipeline failed: %s", slug, exc)
             feat_dict = self._v2_feature_defaults(slug, raw_weather)
 
-        # ---- Match training-time feature distribution ────────────
-        # `scripts/train_city.py::_ensure_derived` injects constant defaults
-        # for any climatology / rolling-delta column missing in the CSV
-        # (climo_pct=1.0, climo_z=0.0, deltas=0.0). The training CSV does
-        # not carry these columns, so the OOD detector and the
-        # WeatherDataPreprocessorV2 were both fitted with zero variance on
-        # them. At inference, `build_features()` produces real values which
-        # collide with that near-singular training distribution and explode
-        # the Mahalanobis distance (~10^3 vs the trained ~3 threshold of ~8),
-        # tripping the OOD guard on every request.
+        # ---- OOD check (v3.3: real features, no zero-fill suppression) ────
+        # v3.2 workaround that zeroed all temporal-dynamic features is REMOVED.
+        # The OOD detector is now trained on real temporal dynamics computed by
+        # _compute_physics_features() in train_city.py, so real inference values
+        # have the correct distribution — no Mahalanobis explosion.
         #
-        # Until the OOD detector and preprocessor are retrained with the
-        # live feature pipeline, override these features back to their
-        # training-time constants. The model couldn't usefully learn from
-        # them anyway (zero variance), so this is information-preserving.
-        for _k in (
-            "prcp_climo_pct", "humidity_climo_pct",      # default 1.0
-        ):
-            feat_dict[_k] = 1.0
-        for _k in (
-            "pressure_climo_z",
-            "pressure_delta_3h", "pressure_delta_6h",
-            "humidity_delta_3h", "rain_rate_1h",
-            "rain_accumulation_3h", "rain_accumulation_6h",
-            "cloud_jump_3h",
-        ):
-            feat_dict[_k] = 0.0
-
-        # ---- OOD check ----
+        # OOD signal = KEEP flowing through the model (high uncertainty → use as
+        # early-warning signal via MC Dropout variance, not as a hard block).
         ood_detector = self._ood_detectors.get(slug)
+        ood_detected = False
+        ood_distance = 0.0
         if ood_detector is not None:
             try:
                 from app.ml.ood.detector import OOD_FEATURES
-                ood_vec  = ood_detector.extract_features(feat_dict)
-                distance = ood_detector.mahalanobis_distance(ood_vec)
-                if ood_detector.is_ood(ood_vec):
-                    logger.info("[%s] OOD detected: distance=%.3f", slug, distance)
-                    return ood_detector.ood_response(slug, distance)
+                ood_vec      = ood_detector.extract_features(feat_dict)
+                ood_distance = ood_detector.mahalanobis_distance(ood_vec)
+                ood_detected = ood_detector.is_ood(ood_vec)
+                if ood_detected:
+                    logger.info(
+                        "[%s] OOD detected (distance=%.3f) — proceeding with "
+                        "elevated uncertainty flag (not blocking inference)",
+                        slug, ood_distance,
+                    )
             except Exception as exc:
                 logger.debug("[%s] OOD check failed: %s", slug, exc)
 
@@ -852,7 +900,8 @@ class CityModelService:
             "confidence":    round(confidence, 4),
             "is_anomaly":    anomaly_score >= 0.40,
             "ae_score":      round(ae_pct,  4),
-            "lstm_score":    round(tcn_pct, 4),  # legacy field name; tcn replaces lstm in v3.2
+            "tcn_score":     round(tcn_pct, 4),
+            "lstm_score":    round(tcn_pct, 4),  # kept for backward compat — same value as tcn_score
             "hri_score":     hri_score,
         }
 

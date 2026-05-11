@@ -950,3 +950,157 @@ Next Response
   - /api/v2/cities/{slug}/status — alert if has_model: false for a trained city (model file corruption)
   - Docker log stream — watch for JWT_SECRET_KEY warnings (would indicate env misconfiguration)
   - Nginx access log — watch for 499 (client disconnects, often TLS cert issues)
+
+New WORK in Claude
+    Complete Architecture Upgrade Report
+
+  What Was Changed and Why
+
+  ---
+  1. TCN: Multi-Scale Dilations + Extended Window (tcn.py)
+
+  ┌─────────────────┬───────────┬─────────────────┬───────────────────────────────────────────────────────────────┐
+  │    Parameter    │  Before   │      After      │                            Reason                             │
+  ├─────────────────┼───────────┼─────────────────┼───────────────────────────────────────────────────────────────┤
+  │ TCN_SEQ_LEN     │ 24        │ 30              │ 1 month of daily data; covers full pre-monsoon buildup        │
+  ├─────────────────┼───────────┼─────────────────┼───────────────────────────────────────────────────────────────┤
+  │ TCN_FILTERS     │ 64        │ 128             │ Wider capacity needed for 6 dilation scales                   │
+  ├─────────────────┼───────────┼─────────────────┼───────────────────────────────────────────────────────────────┤
+  │ TCN_DILATIONS   │ [1,2,4,8] │ [1,2,4,8,16,32] │ Captures flash signals → weekly → monthly → synoptic patterns │
+  ├─────────────────┼───────────┼─────────────────┼───────────────────────────────────────────────────────────────┤
+  │ Receptive field │ 31 steps  │ 127 steps       │ ~4 months of atmospheric context                              │
+  └─────────────────┴───────────┴─────────────────┴───────────────────────────────────────────────────────────────┘
+
+  Storm dynamics coverage:
+  - d=1: Flash-flood day-to-day precursors
+  - d=2–4: Convective system formation (3–7 days)
+  - d=8–16: Monsoon weekly intensification cycles
+  - d=32: Pre-monsoon onset signatures (2-month lead time)
+
+  ---
+  2. Physics Feature Engineering (preprocessing_v2.py)
+
+  6 new features added (NUMERICAL_V2: 22 → 28):
+
+  ┌────────────────────────┬───────────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │        Feature         │                  Formula                  │                                            What it captures                                            │
+  ├────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ pressure_accel         │ ΔΔpressure (2nd derivative)               │ MCS rapid development — pressure drop accelerating is a convective onset signature                     │
+  ├────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ humidity_accel         │ ΔΔhumidity                                │ Accelerating moisture buildup before saturation                                                        │
+  ├────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ pressure_volatility_6d │ 6-day rolling std(pressure)               │ Storm passage variability vs stable blocking                                                           │
+  ├────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ humidity_volatility_6d │ 6-day rolling std(humidity)               │ Moisture surge variability                                                                             │
+  ├────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ prcp_trend_6d          │ 6-day linear slope of prcp                │ Storm intensification vs weakening trend                                                               │
+  ├────────────────────────┼───────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ atm_instability        │ moisture_flux × |Δpressure| / tdew_spread │ Physics proxy for convective instability: high moisture transport + pressure forcing + near-saturation │
+  └────────────────────────┴───────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  All 7 delta features (previously zeroed to 0.0) now computed from real time-series diffs in train_city.py → the model learns actual storm evolution, not a constant-zero artifact.
+
+  ---
+  3. Physics-Weighted AE Reconstruction Loss (city_hybrid.py)
+
+  The autoencoder now minimizes a feature-importance-weighted MSE rather than uniform MSE:
+
+  Loss = Σᵢ wᵢ · (x̂ᵢ − xᵢ)²     where wᵢ is normalized so mean(wᵢ)=1
+
+  Weight hierarchy:
+  - prcp = 3.0× — rainfall is the primary flood signal
+  - rain_* features = 2.5× — accumulation and rate dynamics
+  - pressure = 2.5× — mesoscale pressure forcing
+  - humidity = 2.0× — atmospheric moisture
+  - atm_instability = 2.0× — convective instability proxy
+  - Temperature features (tmin/tmax/tavg) = 0.5× — diurnal variation less relevant for floods
+
+  This forces the AE to learn a tight representation of flood-relevant atmospheric states and produce high reconstruction error when those signals deviate from fair-weather patterns.
+
+  ---
+  4. Monte Carlo Dropout Uncertainty (city_hybrid.py)
+
+  New method predict_mc(x, sequence, n_samples=15):
+  - Runs 15 stochastic forward passes with training=True (dropout active)
+  - Computes coefficient of variation (CV = std/mean) of reconstruction errors
+  - High CV = model is uncertain = unstable/anomalous atmospheric state
+
+  Outputs:
+  {
+    "ae_uncertainty":   0.xx,  # [0,1] — AE error CV across MC samples
+    "tcn_uncertainty":  0.xx,  # [0,1] — TCN error CV
+    "model_entropy":    0.xx,  # 0.6·ae_unc + 0.4·tcn_unc — combined epistemic uncertainty
+    "mc_samples":       15,
+    # ... all standard predict() fields
+  }
+
+  Production value: Uncertainty spikes are early-warning signals for atmospheric instability even before event_probability crosses the alert threshold.
+
+  ---
+  5. Hybrid Labeling Strategy (train_city.py, labeling/rules.py, labeling/engine.py)
+
+  Three-layer system replaces pure percentile labeling:
+
+  Layer A — Historical event anchoring (highest priority, 3-day pre-event window):
+  - 5–7 verified extreme events per city from PMD/NDMA records
+  - Pre-event window (t−3d → t): label=1, conf=1.0 → teaches causal atmospheric precursors
+  - Post-event (t+1d): label=1, conf=0.8 → residual flooding signature
+
+  Layer B — Extreme Weather Index (physics composite):
+  EWI = 0.35·rain_norm + 0.30·pressure_drop_norm + 0.20·humidity_norm + 0.15·cloud_norm
+  - Monsoon season multiplier: ×1.15
+  - EWI ≥ 0.55 → label=1 (conf=0.80–0.95)
+  - EWI ≤ 0.20 → label=0 (conf=0.85)
+
+  Layer C — Statistical percentile baseline (fallback):
+  - Per-city 95th/15th percentile on prcp, pressure, humidity
+  - Only active where A and B produced no label
+
+  Three new labeling rules added (L8/L9/L10):
+  - L8 EWI (weight 1.3 — highest new rule): physics composite score
+  - L9 Pressure Acceleration (weight 1.0): ΔΔP ≤ −1.5 → MCS onset
+  - L10 Atmospheric Instability (weight 0.9): moisture × pressure forcing / saturation deficit
+
+  ---
+  6. OOD Handling: Signal Preserved, Not Blocked
+
+  Before (v3.2 bug): All temporal-dynamic features zeroed at inference (feat_dict[k] = 0.0) — this suppressed real pressure drops, humidity surges, and instability signals to match the near-zero-variance OOD
+  training distribution. Extreme events looked like fair weather.
+
+  After (v3.3): Real values pass through. OOD detection marks ood_detected=True in the response but does not block inference. Instead, the OOD flag + high model_entropy from MC Dropout together form the
+  early-warning signal. Rare atmospheric states are treated as signal, not noise.
+
+  ---
+  7. Warm-Start TCN Buffer (city_model_service.py)
+
+  On model load, _seed_buffer_from_history(slug) preloads the last 30 preprocessed rows from the training CSV into _CityBuffer. The TCN branch is immediately active on the first request — eliminates the
+  30-observation blind window that previously caused underestimated risk scores during system startup.
+
+  ---
+  8. LSTM Completely Removed
+
+  All LSTM artifacts eliminated:
+  - backend/app/saved_models/lstm_model/ — deleted
+  - backend/saved_models/lstm_model/ — deleted
+  - LSTM_UNITS, SEQUENCE_LENGTH in ModelConfig — removed
+  - use_lstm in CityTrainRequest, TrainingRequest — renamed to use_tcn
+  - lstm_score in PredictionResponse — renamed to tcn_score (backward-compat alias kept in service response)
+  - ae_lstm_attention model type string → ae_tcn_fusion
+  - lstm_val_loss / epochs_lstm in model registry → tcn_val_loss / epochs_tcn
+  - All docstring/comment references updated
+
+  No LSTM code path exists anywhere in the active codebase. The TCN (CausalTCN, dilations [1,2,4,8,16,32]) is the sole temporal branch.
+
+  ---
+  Retraining Required
+
+  The following changes require retraining all city models:
+  1. TCN_SEQ_LEN changed from 24 → 30 (sequence dimension mismatch)
+  2. TCN_FILTERS changed from 64 → 128 (weight shape mismatch)
+  3. TCN_DILATIONS extended to [1,2,4,8,16,32] (architecture change)
+  4. NUMERICAL_V2 expanded from 22 → 28 features (input_dim increases)
+  5. Physics features now contain real values instead of zeros (distribution shift)
+
+  python scripts/train_city.py --all --data backend/data/pakistan_weather_2000_2024.csv --epochs 150
+
+  Expected AUC improvements: historical event anchoring + real temporal dynamics should push Islamabad (weakest at 0.832) to 0.87+ and maintain Karachi's strong 0.96+.

@@ -65,6 +65,10 @@ class IsotonicCalibrator:
         self._ci_table:  Optional[np.ndarray]         = None  # (99, 2) [lower, upper]
         self._is_fitted: bool                          = False
 
+    @property
+    def is_fitted(self) -> bool:
+        return self._is_fitted
+
     # --------------------------------------------------------
     #  Fit
     # --------------------------------------------------------

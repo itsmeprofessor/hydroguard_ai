@@ -37,7 +37,26 @@ class WeatherInputV2(BaseModel):
     wspd:        Optional[float] = Field(None, ge=0)
     observed_at: Optional[datetime] = None
 
+
+class CityPredictBody(BaseModel):
+    """
+    Permissive predict body for POST /api/v2/cities/{city}/predict.
+    City comes from the URL path -- all weather fields are optional.
+    Missing values are filled from climatological defaults server-side.
+    """
+    prcp:        Optional[float] = Field(None, ge=0,        description="Precipitation mm/h")
+    humidity:    Optional[float] = Field(None, ge=0, le=100, description="Relative humidity %")
+    pressure:    Optional[float] = Field(None,               description="Sea-level pressure hPa")
+    tmax:        Optional[float] = Field(None, description="Max temperature C")
+    tmin:        Optional[float] = Field(None, description="Min temperature C")
+    tavg:        Optional[float] = Field(None, description="Avg temperature C")
+    cloud_cover: Optional[float] = Field(None, ge=0, le=100)
+    dew_point:   Optional[float] = None
+    wspd:        Optional[float] = Field(None, ge=0)
+    observed_at: Optional[datetime] = None
+
     model_config = {
+        "extra": "allow",
         "json_schema_extra": {
             "example": {
                 "city":        "Islamabad",
@@ -48,7 +67,7 @@ class WeatherInputV2(BaseModel):
                 "tmin":        27.8,
                 "cloud_cover": 95.0,
             }
-        }
+        },
     }
 
 
@@ -58,12 +77,15 @@ class BatchWeatherInputV2(BaseModel):
 
 
 class TrainingRequestV2(BaseModel):
-    """City-specific training trigger."""
-    city:       str  = Field(..., description="City name or slug")
+    """City-specific training trigger. city comes from URL path; body city is optional."""
+    city:       Optional[str] = Field(None, description="City name or slug (taken from URL if omitted)")
     epochs:     int  = Field(150, ge=1, le=500)
     batch_size: int  = Field(64,  ge=8, le=512)
     use_tcn:    bool = True
+    use_lstm:   bool = True   # deprecated alias — ignored, use use_tcn
     force:      bool = Field(False, description="Skip metrics gate (AUC/ECE)")
+
+    model_config = {"extra": "ignore"}  # silently drop unknown fields (e.g. old use_lstm)
 
 
 # ================================================================

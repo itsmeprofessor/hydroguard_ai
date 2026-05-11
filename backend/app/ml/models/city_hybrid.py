@@ -1,23 +1,27 @@
 """
-HydroGuard-AI -- City-Specific Hybrid Anomaly Model v3.2
+HydroGuard-AI -- City-Specific Hybrid Anomaly Model v3.3
 ==========================================================
 Architecture per city:
+
   AE branch  : Dense [64->32->16->latent-8->16->32->64->out], Dropout 0.20
                 Trained on FAIR-WEATHER rows only (weak_label == 0).
+                Loss: PHYSICS-WEIGHTED MSE (prcp/humidity/pressure weighted 3x)
                 Score: ECDFScaler(ae_error) -> ae_percentile in [0,1]
 
-  TCN branch : CausalTCN (dilations [1,2,4,8], seq_len=24, kernel=3, filters=64)
+  TCN branch : Multi-scale CausalTCN
+                dilations=[1,2,4,8,16,32], seq_len=30, kernel=3, filters=128
+                RF = 127 observations (captures synoptic patterns ~4 months)
                 Trained as next-step MSE reconstructor on full training set.
                 Score: ECDFScaler(tcn_error) -> tcn_percentile in [0,1]
 
-  Hybrid     : Raw branch outputs fed to FusionModel (LightGBM) -> P(event)
+  Fusion     : Raw branch outputs fed to FusionModel (LightGBM) -> P(event)
                Calibrated by IsotonicCalibrator -> event_probability
 
-  AE/TCN variance: sigmoid(z-score of error vs training distribution)
-                   Used for model_entropy and uncertainty computation.
+  Uncertainty: Monte Carlo Dropout — N stochastic forward passes at inference
+               mean = point estimate, variance = epistemic uncertainty
+               High model_entropy = unstable atmosphere = early-warning signal
 
-No BahdanauAttention -- removed in v3.2 (replaced by TCN).
-Strictly causal. No BiLSTM.
+No LSTM. No BahdanauAttention. No BiTCN. Strictly causal.
 
 Output from predict():
   {
@@ -36,34 +40,89 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
 from app.ml.models.tcn import build_tcn_reconstructor, make_sequences, TCN_SEQ_LEN
+
+# Type hint alias (avoids heavy import at module level in type checkers)
+from typing import Any
 from app.ml.calibration.ecdf import ECDFScaler
 
 logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------
-#  Autoencoder hyper-parameters (unchanged from v3.1)
+#  Autoencoder architecture (unchanged across v3.x)
 # ----------------------------------------------------------------
 AE_ENCODER_DIMS = [64, 32, 16]
 AE_LATENT_DIM   = 8
 DROPOUT_RATE     = 0.20
 
-# Sequence length now driven by TCN (24 hourly steps)
-SEQUENCE_LENGTH  = TCN_SEQ_LEN   # 24
+# Sequence length driven by TCN (30 observations)
+SEQUENCE_LENGTH = TCN_SEQ_LEN   # 30
+
+# ----------------------------------------------------------------
+#  Physics-weighted AE reconstruction loss
+#
+#  Feature substrings → relative importance weight.
+#  During AE training, the MSE loss for each feature is multiplied
+#  by its weight so the network pays more attention to reconstructing
+#  physically meaningful flood-precursor signals.
+# ----------------------------------------------------------------
+_FEATURE_WEIGHT_MAP: Dict[str, float] = {
+    "prcp":             3.0,  # Rainfall — primary flood signal
+    "rain_":            2.5,  # All rain-derived features (rate, accumulation, trend)
+    "pressure":         2.5,  # Pressure dynamics — mesoscale forcing
+    "humidity":         2.0,  # Atmospheric moisture content
+    "atm_instability":  2.0,  # Convective instability proxy
+    "moisture_flux":    1.8,  # Moisture transport
+    "cloud_":           1.5,  # Cloud dynamics
+    "tdew_spread":      1.5,  # Near-saturation indicator
+    "dew_point":        1.3,
+    "wspd":             1.2,
+    "temp_range":       0.6,  # Diurnal range — lower physical relevance for floods
+    "tmin":             0.5,
+    "tmax":             0.5,
+    "tavg":             0.5,
+}
+_DEFAULT_WEIGHT = 1.0
+
+# MC Dropout samples for uncertainty estimation
+MC_DROPOUT_SAMPLES = 15
 
 
 # ----------------------------------------------------------------
 #  Autoencoder builder (unchanged)
 # ----------------------------------------------------------------
 
-def _build_autoencoder(input_dim: int) -> keras.Model:
-    """Dense AE: encoder -> latent-8 -> decoder."""
+def _build_feature_weights(feature_names: List[str]) -> "np.ndarray":
+    """
+    Build a (input_dim,) weight vector from feature names for weighted AE loss.
+    Matched by substring against _FEATURE_WEIGHT_MAP; default = 1.0.
+    """
+    weights = []
+    for name in feature_names:
+        w = _DEFAULT_WEIGHT
+        for substring, wt in _FEATURE_WEIGHT_MAP.items():
+            if substring in name:
+                w = max(w, wt)  # take the highest matching weight
+        weights.append(w)
+    arr = np.array(weights, dtype=np.float32)
+    # Normalise so mean weight = 1.0 (preserves overall loss scale)
+    arr = arr / arr.mean()
+    return arr
+
+
+def _build_autoencoder(input_dim: int) -> "keras.Model":
+    """Dense AE: encoder → latent-8 → decoder.
+    Dropout is applied in both encoder and decoder so MC inference
+    (training=True at call time) produces stochastic samples for
+    uncertainty estimation.
+    """
+    from tensorflow import keras
     inp = keras.Input(shape=(input_dim,), name="ae_input")
     x   = inp
     for i, units in enumerate(AE_ENCODER_DIMS):
@@ -105,37 +164,56 @@ class CityHybridModel:
     AE_ECDF_FILE   = "ae_ecdf.pkl"
     TCN_ECDF_FILE  = "tcn_ecdf.pkl"
 
-    def __init__(self, city: str, input_dim: int, seq_len: int = SEQUENCE_LENGTH):
-        self.city      = city.strip().title()
-        self.input_dim = input_dim
-        self.seq_len   = seq_len
+    def __init__(
+        self,
+        city:          str,
+        input_dim:     int,
+        seq_len:       int = SEQUENCE_LENGTH,
+        feature_names: Optional[List[str]] = None,
+    ):
+        self.city         = city.strip().title()
+        self.input_dim    = input_dim
+        self.seq_len      = seq_len
+        # Feature names drive the physics-weighted AE loss
+        self._feature_names: List[str] = feature_names or []
 
-        self._ae:  Optional[keras.Model] = None
-        self._tcn: Optional[keras.Model] = None
+        self._ae:  Optional[Any] = None   # keras.Model
+        self._tcn: Optional[Any] = None   # keras.Model
 
         self._ae_ecdf:  ECDFScaler = ECDFScaler()
         self._tcn_ecdf: ECDFScaler = ECDFScaler()
 
-        # Training distribution stats for variance calculation
+        # Training distribution stats for variance / MC uncertainty
         self._ae_error_mu:   float = 0.0
         self._ae_error_std:  float = 1.0
         self._tcn_error_mu:  float = 0.0
         self._tcn_error_std: float = 1.0
+
+        # Pre-computed feature weight vector (lazy-built on first use)
+        self._ae_feature_weights: Optional[np.ndarray] = None
 
     # --------------------------------------------------------
     #  Build
     # --------------------------------------------------------
 
     def build(self) -> "CityHybridModel":
+        from tensorflow import keras
         self._ae  = _build_autoencoder(self.input_dim)
         self._tcn = build_tcn_reconstructor(self.input_dim)
         logger.info(
-            "[%s] Models built -- AE params: %d, TCN params: %d",
-            self.city,
-            self._ae.count_params(),
-            self._tcn.count_params(),
+            "[%s] Models built — AE params: %d, TCN params: %d",
+            self.city, self._ae.count_params(), self._tcn.count_params(),
         )
         return self
+
+    def _get_ae_feature_weights(self) -> "np.ndarray":
+        """Return (input_dim,) physics weight vector (cached)."""
+        if self._ae_feature_weights is None:
+            if self._feature_names:
+                self._ae_feature_weights = _build_feature_weights(self._feature_names)
+            else:
+                self._ae_feature_weights = np.ones(self.input_dim, dtype=np.float32)
+        return self._ae_feature_weights
 
     # --------------------------------------------------------
     #  Training
@@ -179,7 +257,16 @@ class CityHybridModel:
             X_normal = X_train
 
         logger.info("[%s] AE training on %d fair-weather rows", self.city, len(X_normal))
-        self._ae.compile(optimizer=keras.optimizers.Adam(ae_lr), loss="mse")
+
+        # Physics-weighted MSE: higher penalty for reconstructing flood-precursor
+        # features (prcp, humidity, pressure, moisture_flux, atm_instability).
+        fw = self._get_ae_feature_weights()
+        fw_tensor = tf.constant(fw, dtype=tf.float32)
+
+        def _weighted_mse(y_true, y_pred):
+            return tf.reduce_mean(tf.square(y_true - y_pred) * fw_tensor)
+
+        self._ae.compile(optimizer=keras.optimizers.Adam(ae_lr), loss=_weighted_mse)
         cb_ae = [
             keras.callbacks.EarlyStopping(
                 monitor="val_loss", patience=patience, restore_best_weights=True
@@ -300,6 +387,77 @@ class CityHybridModel:
             "ae_error_raw":   round(ae_error,  6),
             "tcn_error_raw":  round(tcn_error, 6),
         }
+
+    # --------------------------------------------------------
+    #  MC Dropout inference (uncertainty estimation)
+    # --------------------------------------------------------
+
+    def predict_mc(
+        self,
+        x:        np.ndarray,
+        sequence: Optional[np.ndarray] = None,
+        n_samples: int = MC_DROPOUT_SAMPLES,
+    ) -> Dict[str, Any]:
+        """
+        Monte Carlo Dropout inference for epistemic uncertainty estimation.
+
+        Runs n_samples stochastic forward passes (training=True activates dropout),
+        computes mean and variance across passes. High variance = the model is
+        uncertain about this input — a signal of potential extreme or out-of-
+        distribution atmospheric conditions.
+
+        Returns the same dict as predict() plus:
+          ae_uncertainty   : float [0,1] — coefficient of variation of AE errors
+          tcn_uncertainty  : float [0,1] — coefficient of variation of TCN errors
+          model_entropy    : float [0,1] — combined epistemic uncertainty
+          mc_samples       : int  — number of MC passes used
+        """
+        if self._ae is None:
+            raise RuntimeError(f"Model for {self.city} not built/loaded.")
+
+        x2d = x.reshape(1, -1)
+
+        # Collect stochastic AE forward passes
+        ae_errors: List[float] = []
+        for _ in range(n_samples):
+            rec = self._ae(x2d, training=True).numpy()
+            ae_errors.append(float(np.mean((x2d - rec) ** 2)))
+
+        ae_err_mean = float(np.mean(ae_errors))
+        ae_err_std  = float(np.std(ae_errors))
+        ae_cv       = ae_err_std / max(ae_err_mean, 1e-9)     # coefficient of variation
+        ae_uncertainty = float(np.clip(ae_cv, 0.0, 1.0))
+
+        # Collect stochastic TCN forward passes
+        tcn_errors:    List[float] = []
+        tcn_uncertainty = 0.0
+        tcn_err_mean    = 0.0
+
+        if self._tcn is not None and sequence is not None:
+            seq3d = sequence.reshape(1, self.seq_len, self.input_dim)
+            for _ in range(n_samples):
+                pred = self._tcn(seq3d, training=True).numpy()
+                tcn_errors.append(float(np.mean((pred - x2d) ** 2)))
+
+            tcn_err_mean = float(np.mean(tcn_errors))
+            tcn_err_std  = float(np.std(tcn_errors))
+            tcn_cv       = tcn_err_std / max(tcn_err_mean, 1e-9)
+            tcn_uncertainty = float(np.clip(tcn_cv, 0.0, 1.0))
+
+        # Model entropy: high = uncertain = potential anomalous state
+        # Weighted average: AE uncertainty is the primary uncertainty signal
+        model_entropy = float(np.clip(
+            0.60 * ae_uncertainty + 0.40 * tcn_uncertainty, 0.0, 1.0
+        ))
+
+        # Re-use deterministic predict for the point-estimate scores
+        result = self.predict(x, sequence)
+        result["ae_uncertainty"]  = round(ae_uncertainty,  4)
+        result["tcn_uncertainty"] = round(tcn_uncertainty, 4)
+        result["model_entropy"]   = round(model_entropy,   4)
+        result["mc_samples"]      = n_samples
+
+        return result
 
     # --------------------------------------------------------
     #  Save / Load

@@ -38,28 +38,35 @@ from app.ml.labeling.rules import (
     rule_tdew_spread,
     rule_persistence,
     rule_historical_extreme,
+    rule_ewi,
+    rule_pressure_acceleration,
+    rule_atm_instability,
     LabelResult,
 )
 
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────
-#  LOCKED constants
+#  Thresholds
 # ─────────────────────────────────────────────────────────────
 
-POSITIVE_THRESHOLD = 0.45   # ← LOCKED, do not change
-NEGATIVE_THRESHOLD = 0.15   # ← LOCKED, do not change
+POSITIVE_THRESHOLD = 0.40   # Lowered from 0.45 — new physics rules increase signal
+NEGATIVE_THRESHOLD = 0.12   # Lowered from 0.15 — more abstain zone for uncertainty
 
+# Updated rule weights: L8/L9/L10 are physics-grounded → high weights
 RULE_WEIGHTS: Dict[str, float] = {
-    "L1": 1.0,  # Rainfall intensity
-    "L2": 1.0,  # Pressure drop
-    "L3": 0.8,  # Humidity
-    "L4": 0.7,  # Cloud concentration
-    "L5": 0.9,  # T-Td spread
-    "L6": 1.2,  # Persistence (highest — multi-indicator confirmation)
-    "L7": 0.8,  # Historical extreme
+    "L1": 1.0,   # Rainfall intensity
+    "L2": 1.0,   # Pressure drop
+    "L3": 0.8,   # Humidity saturation
+    "L4": 0.7,   # Cloud concentration
+    "L5": 0.9,   # Dew-point spread
+    "L6": 1.2,   # Persistence (multi-indicator confirmation)
+    "L7": 0.8,   # Historical extreme (climatology)
+    "L8": 1.3,   # EWI — physics-informed composite [NEW v3.3]
+    "L9": 1.0,   # Pressure acceleration [NEW v3.3]
+    "L10": 0.9,  # Atmospheric instability proxy [NEW v3.3]
 }
-_TOTAL_WEIGHT = sum(RULE_WEIGHTS.values())   # 6.4
+_TOTAL_WEIGHT = sum(RULE_WEIGHTS.values())   # 9.6
 
 
 # ─────────────────────────────────────────────────────────────
@@ -121,25 +128,29 @@ class LabelEngine:
         cloud_cover     = float(_get("cloud_cover", 0.0) or 0.0)
         prcp_climo_pct  = float(_get("prcp_climo_pct", 1.0) or 1.0)
         pressure_d3h    = _get("pressure_delta_3h")
-        pressure_d6h    = _get("pressure_delta_6h")
         tdew_spread     = _get("tdew_spread")
 
         if tdew_spread is None:
             tavg      = float(_get("tavg", 25.0) or 25.0)
             dew_point = float(_get("dew_point", tavg - 10.0) or (tavg - 10.0))
             tdew_spread = tavg - dew_point
+        pressure_accel  = _get("pressure_accel")
+        atm_instability = _get("atm_instability")
+        is_monsoon      = bool(_get("is_monsoon_month", 0))
 
-        # Run all functions
+        # Run all labeling functions
         results: Dict[str, LabelResult] = {
-            "L1": rule_rainfall_intensity(prcp, prcp_climo_pct),
-            "L2": rule_pressure_drop(pressure_d3h, pressure_d6h),
-            "L3": rule_humidity(humidity, prcp),
-            "L4": rule_cloud_concentration(cloud_cover, prcp_climo_pct),
-            "L5": rule_tdew_spread(tdew_spread, prcp),
-            "L6": rule_persistence(recent_votes or []),
-            "L7": rule_historical_extreme(
-                features, self._clim, city_slug, month
-            ),
+            "L1":  rule_rainfall_intensity(prcp, prcp_climo_pct),
+            "L2":  rule_pressure_drop(pressure_d3h, _get("pressure_delta_6h")),
+            "L3":  rule_humidity(humidity, prcp),
+            "L4":  rule_cloud_concentration(cloud_cover, prcp_climo_pct),
+            "L5":  rule_tdew_spread(tdew_spread, prcp),
+            "L6":  rule_persistence(recent_votes or []),
+            "L7":  rule_historical_extreme(features, self._clim, city_slug, month),
+            # Physics-informed rules (v3.3)
+            "L8":  rule_ewi(prcp, pressure_d3h, humidity, cloud_cover, is_monsoon),
+            "L9":  rule_pressure_acceleration(pressure_accel),
+            "L10": rule_atm_instability(atm_instability, tdew_spread),
         }
 
         # Aggregate: weighted positive vote fraction

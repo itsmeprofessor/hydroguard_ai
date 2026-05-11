@@ -11,7 +11,7 @@ from app.schemas import HealthResponse, ModelInfoResponse
 
 router = APIRouter(tags=["System"])
 
-APP_VERSION = "3.1.0"
+APP_VERSION = "3.2.0"
 APP_TITLE   = "HydroGuard-AI — Adaptive Flood Intelligence API"
 
 
