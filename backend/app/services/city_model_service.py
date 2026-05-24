@@ -717,48 +717,7 @@ class CityModelService:
 
         # ---- Model not available -- heuristic ----
         if model is None:
-            h    = self._heuristic_predict(slug, raw_weather)
-            risk = h.get("risk_level", "Low")
-            band_map  = {"Low": "Low", "Medium": "Moderate", "High": "High"}
-            risk_band = band_map.get(risk, "Moderate")
-            p_event   = float(h.get("anomaly_score", 0.3))
-            return {
-                "inference_id":        str(uuid4()),
-                "city":                _display_name(slug),
-                "city_slug":           slug,
-                "inferred_at":         now.isoformat(),
-                "model_version":       "heuristic",
-                "calibration_version": "none",
-                "source":              "heuristic",
-                "event_probability":   round(p_event, 4),
-                "confidence_interval": [
-                    round(max(0.0, p_event - 0.15), 4),
-                    round(min(1.0, p_event + 0.15), 4),
-                ],
-                "uncertainty":         0.30,
-                "model_entropy":       None,
-                "risk_band":           risk_band,
-                "hri_score":           {"Low": 12, "Moderate": 40, "High": 68, "Severe": 88}.get(risk_band, 12),
-                "is_alert":            p_event > self._get_alert_threshold(slug),
-                "alert_threshold":     round(self._get_alert_threshold(slug), 4),
-                "alert_tier":          self._compute_alert_tier(p_event, self._get_alert_threshold(slug)),
-                "component_scores":    None,
-                "drivers":             None,
-                "weather_inputs":      {
-                    k: raw_weather.get(k)
-                    for k in ["prcp","humidity","pressure","cloud_cover","tmax","tmin","tavg"]
-                },
-                "climatology_context": None,
-                "inference_mode":          "deterministic",
-                "uncertainty_available":   False,
-                "epistemic_uncertainty":   None,
-                "model_uncertainty_score": None,
-                "prediction_stability":    None,
-                "mc_samples_requested":    None,
-                "mc_samples_completed":    None,
-                "uncertainty_strategy":    None,
-                "degraded_reason":         "heuristic_source",
-            }
+            return self._build_degraded_response(slug, raw_weather, now, "heuristic_source")
 
         # ---- Preprocess ----
         preprocessor = self._preprocessors.get(slug)
@@ -766,10 +725,7 @@ class CityModelService:
             x_vec = self._preprocess(feat_dict, preprocessor, slug=slug)
         except Exception as exc:
             logger.error("[%s] Preprocess failed: %s", slug, exc)
-            result = self._heuristic_predict(slug, raw_weather)
-            result["inference_id"] = str(uuid4())
-            result["inferred_at"]  = now.isoformat()
-            return result
+            return self._build_degraded_response(slug, raw_weather, now, "preprocessing_failed")
 
         # ---- Rolling window for TCN ----
         sequence = self._buf.push_and_get(slug, x_vec)
@@ -1262,6 +1218,66 @@ class CityModelService:
             "dew_point", "wspd", "tmin", "tmax", "tavg",
         ]
         return np.array([float(features.get(k, 0.0)) for k in keys], dtype=float)
+
+    def _build_degraded_response(
+        self,
+        slug: str,
+        raw_weather: Dict[str, Any],
+        now: datetime,
+        degraded_reason: str,
+    ) -> Dict[str, Any]:
+        """Return a fully schema-conformant PredictionResponseV2 for any degraded path.
+
+        Covers: untrained-city heuristic, preprocessing failure, and any other
+        condition that prevents reaching the fusion pipeline. All callers must
+        go through this method — never construct a partial dict inline.
+        """
+        h         = self._heuristic_predict(slug, raw_weather)
+        risk      = h.get("risk_level", "Low")
+        band_map  = {"Low": "Low", "Medium": "Moderate", "High": "High"}
+        risk_band = band_map.get(risk, "Moderate")
+        p_event   = float(h.get("anomaly_score", 0.3))
+        alert_threshold = self._get_alert_threshold(slug)
+        return {
+            "inference_id":        str(uuid4()),
+            "city":                _display_name(slug),
+            "city_slug":           slug,
+            "inferred_at":         now.isoformat(),
+            "model_version":       "heuristic",
+            "calibration_version": "none",
+            "source":              "heuristic",
+            "event_probability":   round(p_event, 4),
+            "confidence_interval": [
+                round(max(0.0, p_event - 0.15), 4),
+                round(min(1.0, p_event + 0.15), 4),
+            ],
+            "uncertainty":         0.30,
+            "model_entropy":       None,
+            "risk_band":           risk_band,
+            "hri_score":           {"Low": 12, "Moderate": 40, "High": 68, "Severe": 88}.get(risk_band, 12),
+            "is_alert":            p_event > alert_threshold,
+            "alert_threshold":     round(alert_threshold, 4),
+            "alert_tier":          self._compute_alert_tier(p_event, alert_threshold),
+            "component_scores":    None,
+            "drivers":             None,
+            "weather_inputs":      {
+                k: raw_weather.get(k)
+                for k in ["prcp", "humidity", "pressure", "cloud_cover", "tmax", "tmin", "tavg"]
+            },
+            "climatology_context": None,
+            "coastal_features":    None,
+            "sequence_context":    None,
+            "inference_mode":          "deterministic",
+            "uncertainty_available":   False,
+            "epistemic_uncertainty":   None,
+            "model_uncertainty_score": None,
+            "prediction_stability":    None,
+            "mc_samples_requested":    None,
+            "mc_samples_completed":    None,
+            "uncertainty_strategy":    None,
+            "degraded_reason":         degraded_reason,
+            "inference_runtime_ms":    None,
+        }
 
     def _heuristic_predict(
         self, slug: str, features: Dict[str, Any]
