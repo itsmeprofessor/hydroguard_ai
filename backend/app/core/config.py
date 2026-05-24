@@ -344,6 +344,39 @@ class DriftConfig:
 
 
 # ============================================================
+#  Monte Carlo Dropout Inference
+# ============================================================
+
+class MCInferenceConfig:
+    """Configuration for parallel MC Dropout inference in predict_v2().
+
+    All values are read from environment variables so they can be
+    tuned per-deployment without code changes.
+    """
+    # Feature flag — set to false to revert to deterministic model.predict()
+    ENABLED: bool = os.getenv("ENABLE_MC_INFERENCE", "true").lower() in ("true", "1", "yes")
+    # Stochastic forward passes per branch per request
+    DROPOUT_SAMPLES: int = int(os.getenv("MC_DROPOUT_SAMPLES", "15"))
+    # Wall-clock timeout for asyncio.gather; fallback triggers on exceed
+    INFERENCE_TIMEOUT_MS: int = int(os.getenv("MC_INFERENCE_TIMEOUT_MS", "3000"))
+    # Uncertainty merge weights (heuristic blend; sum should equal 1.0)
+    AE_UNCERTAINTY_WEIGHT: float = float(os.getenv("MC_AE_UNCERTAINTY_WEIGHT", "0.60"))
+    TCN_UNCERTAINTY_WEIGHT: float = float(os.getenv("MC_TCN_UNCERTAINTY_WEIGHT", "0.40"))
+    # Clip bounds applied after CoV computation
+    UNCERTAINTY_MIN: float = float(os.getenv("MC_UNCERTAINTY_MIN", "0.0"))
+    UNCERTAINTY_MAX: float = float(os.getenv("MC_UNCERTAINTY_MAX", "1.0"))
+    # prediction_stability tier boundaries
+    STABILITY_THRESHOLD_MODERATE: float = float(os.getenv("MC_STABILITY_THRESHOLD_MODERATE", "0.25"))
+    STABILITY_THRESHOLD_HIGH: float = float(os.getenv("MC_STABILITY_THRESHOLD_HIGH", "0.55"))
+    # Semaphore bound on concurrent TF thread-pool workers across all city requests
+    MAX_CONCURRENT_THREADS: int = int(os.getenv("MAX_CONCURRENT_MC_THREADS", "4"))
+    # Uncertainty strategy name (logged in response; extensible for future strategies)
+    UNCERTAINTY_STRATEGY: str = os.getenv("MC_UNCERTAINTY_STRATEGY", "weighted_blend")
+    # Bin count for ECE computation in calibration audit
+    CALIBRATION_ECE_BINS: int = int(os.getenv("CALIBRATION_ECE_BINS", "15"))
+
+
+# ============================================================
 #  Logging
 # ============================================================
 
