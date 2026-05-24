@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,12 +41,16 @@ SEQUENCE_LENGTH = TCN_SEQ_LEN  # 24 — keep backward-compat name
 
 logger = logging.getLogger(__name__)
 
-# Semaphore bounds concurrent TF thread-pool workers across all city requests.
-_mc_semaphore: asyncio.Semaphore = asyncio.Semaphore(MCInferenceConfig.MAX_CONCURRENT_THREADS)
+# Semaphore is created lazily on first async access (asyncio.Semaphore must
+# be created inside a running event loop on Python < 3.10).
+_mc_semaphore: Optional[asyncio.Semaphore] = None
 
 # Rolling 100-request MC success rate per city (in-memory, no DB/Redis dependency).
 # Key: city slug; Value: deque of bools (True=mc_dropout completed, False=fallback).
 _mc_success_window: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
+
+# Per-city timestamp of last MC success rate log to prevent log spam
+_mc_last_warn_at: Dict[str, float] = defaultdict(float)
 
 
 def _classify_prediction_stability(epistemic_uncertainty: float) -> str:
@@ -55,6 +60,14 @@ def _classify_prediction_stability(epistemic_uncertainty: float) -> str:
     if epistemic_uncertainty > MCInferenceConfig.STABILITY_THRESHOLD_MODERATE:
         return "moderate_uncertainty"
     return "stable"
+
+
+def _get_mc_semaphore() -> asyncio.Semaphore:
+    """Return (or create) the MC inference semaphore. Thread-safe via GIL."""
+    global _mc_semaphore
+    if _mc_semaphore is None:
+        _mc_semaphore = asyncio.Semaphore(MCInferenceConfig.MAX_CONCURRENT_THREADS)
+    return _mc_semaphore
 
 
 # ──────────────────────────────────────────────────────────
@@ -762,8 +775,7 @@ class CityModelService:
         sequence = self._buf.push_and_get(slug, x_vec)
 
         # ---- AE + TCN branch scoring ----
-        import time as _time
-        _branch_t0 = _time.perf_counter()
+        _branch_t0 = time.perf_counter()
 
         inference_mode        = "deterministic"
         uncertainty_available = False
@@ -786,9 +798,9 @@ class CityModelService:
                 MCInferenceConfig.UNCERTAINTY_MIN,
                 MCInferenceConfig.UNCERTAINTY_MAX,
             )
-            _gather_t0 = _time.perf_counter()
+            _gather_t0 = time.perf_counter()
             try:
-                async with _mc_semaphore:
+                async with _get_mc_semaphore():
                     ae_result, tcn_result = await asyncio.wait_for(
                         asyncio.gather(
                             asyncio.to_thread(ae_fn),
@@ -796,7 +808,7 @@ class CityModelService:
                         ),
                         timeout=MCInferenceConfig.INFERENCE_TIMEOUT_MS / 1000.0,
                     )
-                ae_mc_latency_ms = (_time.perf_counter() - _gather_t0) * 1000
+                ae_mc_latency_ms = (time.perf_counter() - _gather_t0) * 1000
 
                 # Deterministic uncertainty merge (documented heuristic weighted blend)
                 epistemic_uncertainty = float(np.clip(
@@ -812,7 +824,7 @@ class CityModelService:
                 mc_samples_used         = MCInferenceConfig.DROPOUT_SAMPLES
                 _mc_success_window[slug].append(True)
 
-                total_elapsed_ms = (_time.perf_counter() - _branch_t0) * 1000
+                total_elapsed_ms = (time.perf_counter() - _branch_t0) * 1000
                 if total_elapsed_ms > MCInferenceConfig.INFERENCE_TIMEOUT_MS * 0.75:
                     logger.info(
                         "[%s] MC inference approaching timeout budget: %.0fms / %dms",
@@ -820,7 +832,7 @@ class CityModelService:
                     )
 
             except asyncio.TimeoutError:
-                logger.warning(
+                logger.info(
                     "[%s] MC inference timeout (>%dms) — falling back to deterministic",
                     slug, MCInferenceConfig.INFERENCE_TIMEOUT_MS,
                 )
@@ -839,13 +851,16 @@ class CityModelService:
         _win = _mc_success_window[slug]
         if len(_win) >= 10:
             mc_rate = sum(_win) / len(_win)
-            if mc_rate < 0.70:
+            _now = time.time()
+            if mc_rate < 0.70 and _now - _mc_last_warn_at[slug] > 60:
                 logger.error("[%s] MC success rate critically low: %.0f%%", slug, mc_rate * 100)
-            elif mc_rate < 0.90:
+                _mc_last_warn_at[slug] = _now
+            elif mc_rate < 0.90 and _now - _mc_last_warn_at[slug] > 60:
                 logger.warning("[%s] MC success rate degraded: %.0f%%", slug, mc_rate * 100)
+                _mc_last_warn_at[slug] = _now
 
         # Point-estimate scores from MC result (or deterministic fallback)
-        if ae_result and tcn_result:
+        if ae_result.get("ae_percentile") is not None and tcn_result.get("tcn_percentile") is not None:
             ae_pct  = ae_result.get("ae_percentile", 0.0)
             tcn_pct = tcn_result.get("tcn_percentile", 0.0)
             ae_var  = ae_result.get("ae_variance", 0.5)
