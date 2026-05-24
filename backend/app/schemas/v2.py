@@ -147,6 +147,29 @@ class PredictionResponseV2(BaseModel):
     ood_distance: Optional[float] = None
     ood_reason:   Optional[str]   = None
 
+    # ── MC Dropout uncertainty (Group A) ─────────────────────────────────────
+    # inference_mode: how branches were run this request
+    inference_mode:          Optional[str]   = None  # "mc_dropout"|"deterministic"|"fallback_deterministic"
+    # uncertainty_available: True only when MC completed without fallback
+    uncertainty_available:   Optional[bool]  = None
+    # epistemic_uncertainty: CoV-based blend (AE+TCN); None on fallback/disabled.
+    # SEPARATE LANE from `uncertainty` (calibrator CI width) and
+    # `model_entropy` (calibrator binary cross-entropy). Never merge the three.
+    epistemic_uncertainty:   Optional[float] = Field(None, ge=0.0, le=1.0)
+    # model_uncertainty_score: explicit API alias for epistemic_uncertainty
+    model_uncertainty_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+    # prediction_stability: human-readable tier derived from epistemic_uncertainty
+    prediction_stability:    Optional[str]   = None  # "stable"|"moderate_uncertainty"|"high_uncertainty"
+    # MC pass counts for observability
+    mc_samples_requested:    Optional[int]   = None
+    mc_samples_completed:    Optional[int]   = None
+    # uncertainty_strategy: name of the merge strategy used (extensible for future)
+    uncertainty_strategy:    Optional[str]   = None  # "weighted_blend"
+    # degraded_reason: non-null when inference fell back to deterministic
+    degraded_reason:         Optional[str]   = None  # "timeout"|"exception"|"disabled"
+    # inference_runtime_ms: included in response only when DEBUG=true
+    inference_runtime_ms:    Optional[float] = None
+
     model_config = {"extra": "allow"}
 
 
