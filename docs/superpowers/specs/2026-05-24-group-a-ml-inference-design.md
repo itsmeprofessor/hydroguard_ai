@@ -80,8 +80,14 @@ All defaults represent safe, conservative operational presets for the current FY
 - Computes:
   - `ae_errors`: `[float]` — per-pass MSE values
   - `ae_mean_error`: `float` — mean across passes
-  - `ae_uncertainty`: coefficient of variation = `std(ae_errors) / max(mean(ae_errors), ε)`, clipped to `[uncertainty_min, uncertainty_max]`
-  - `ae_percentile`: ECDF rank of `ae_mean_error` (replaces single-pass error)
+  - `ae_uncertainty`: coefficient of variation, computed as:
+  ```
+  EPSILON = 1e-9
+  ae_uncertainty = std(ae_errors) / max(mean(ae_errors), EPSILON)
+  ae_uncertainty = clip(ae_uncertainty, uncertainty_min, uncertainty_max)
+  ```
+  The epsilon guard is applied **before** division to prevent division-by-zero in near-zero error regimes (fair weather on well-fitted models). The clip is applied **after** the safe division — applying clip first and dividing after would produce incorrect behaviour when the mean is near zero. `EPSILON` is a module-level constant, not hardcoded inline.
+  - `ae_percentile`: ECDF rank of `ae_mean_error`. The ECDF is computed exclusively over the **training error distribution** (fitted during `train()` on `X_train`, stored in `self._ae_ecdf`). It is never refit on calibration or test data. This ensures normalization is anchored to the training regime and cannot leak calibration signal into the percentile score.
   - `ae_variance_legacy`: z-score proxy (preserved for `predict()` backward compat, not used in MC path)
 - Touches no shared state. Pure function except for TF graph execution.
 - Returns plain `dict`.
@@ -110,7 +116,9 @@ ae_result, tcn_result = await asyncio.gather(
 
 This keeps branch method names private while giving the service layer a clean, encapsulation-respecting interface.
 
-**`predict_mc()` (unchanged externally)** — delegates to `_mc_ae_branch` + `_mc_tcn_branch` sequentially. Backward-compatible for unit tests and any direct callers.
+**`predict_mc()` (sequential, test/backward-compat only)** — delegates to `_mc_ae_branch` + `_mc_tcn_branch` sequentially. Preserved for unit tests and external callers that rely on this interface.
+
+> **Invariant:** `predict_mc()` must **never** be used inside the production inference path once `ENABLE_MC_INFERENCE=true`. It is marked `# INTERNAL / TEST ONLY — use prepare_mc_tasks() for production parallel dispatch` in source. This prevents accidental sequential-MC degradation during debugging or future refactoring.
 
 **`predict()` (unchanged)** — deterministic single-pass path. Not modified.
 
@@ -174,6 +182,8 @@ mc_samples_used       = 1
 
 Fallback is logged at `WARNING` level with city slug, reason, and latency.
 
+> **Invariant — no fake uncertainty on fallback:** When `inference_mode = "fallback_deterministic"`, `epistemic_uncertainty` must remain `None`. It must never be filled with a last-known value, approximated from the z-score proxy, or estimated from the deterministic `ae_variance`/`tcn_variance`. Fake uncertainty on fallback is worse than null — it silently misrepresents model confidence. The `uncertainty_available = False` flag is the contract to downstream consumers.
+
 #### Feature Flag Off (`ENABLE_MC_INFERENCE=false`)
 
 Same as deterministic `model.predict()` but `inference_mode = "deterministic"`, `degraded_reason = "disabled"`.
@@ -206,6 +216,8 @@ UNCERTAINTY_STRATEGY = "weighted_blend"   # future: "max_branch" | "entropy_prox
 TensorFlow 2.x Keras models support concurrent inference calls from multiple threads when models do not share variables. AE and TCN are separate `keras.Model` instances with no shared weights. Concurrent `model(x, training=True)` calls are safe under this constraint.
 
 **Safeguard:** `asyncio.Semaphore(MAX_CONCURRENT_MC_THREADS)` at the service level bounds simultaneous TF thread-pool workers across all city requests. If TF runtime instability appears during testing, the semaphore bound is reduced without changing inference logic.
+
+**GPU contention note:** The semaphore bounds *logical* Python concurrency. TensorFlow still serialises some GPU ops internally (kernel launch queuing, memory allocation). Under concurrent `training=True` calls on GPU, nondeterministic latency spikes and rare OOM bursts remain possible even with variable isolation. The semaphore mitigates this — it does not eliminate it. On CPU-only inference (the expected FYP deployment), this risk does not apply. If GPU deployment is introduced later, per-device locking or `tf.function` pre-compilation should be evaluated.
 
 ---
 
@@ -262,11 +274,20 @@ The three uncertainty lanes in the final response are:
 **Per-city audit steps:**
 
 1. Load saved calibrator from `saved_models/city_models/<slug>/calibrator.pkl`
-2. Reconstruct test split using the strategy recorded in `training_metrics.json`:
-   - **Primary:** `holdout_strategy = "year_2023_plus"` → filter master CSV to 2023+ rows for this city (Islamabad, Lahore)
-   - **Fallback:** `holdout_strategy = "last_15pct_fallback"` → take the last 15% of city rows chronologically (Karachi, Gilgit, Peshawar, Quetta — these have `holdout_rows: 0` which means no separate year-holdout was available; the `test` split is used instead)
-   - For cities where `holdout_rows = 0`, the audit uses the **test split** (`test_n_rows` from `training_metrics.json`) rather than a separate holdout. This is explicitly noted in `calibration_audit.json["notes"]` per city.
-   - Re-apply `WeatherDataPreprocessorV2` transform (loaded from `preprocessor_v2.joblib`), apply FusionModel to reconstruct uncalibrated probabilities for the split.
+2. Reconstruct evaluation split using a strict three-tier hierarchy (evaluated in order — first applicable wins):
+
+   **Tier 1 — Year-based holdout** (`holdout_strategy = "year_2023_plus"`, `holdout_rows > 0`):  
+   Filter master CSV to rows with `date >= 2023-01-01` for this city slug. Used for Islamabad and Lahore.
+
+   **Tier 2 — Temporal last-15% split** (`holdout_strategy = "last_15pct_fallback"`, `holdout_rows = 0`, test rows available):  
+   Sort city rows chronologically; take the last 15% as the evaluation split. Used for Karachi, Gilgit, Peshawar, Quetta.
+
+   **Tier 3 — Stored test split** (no holdout, no temporal split reproducible):  
+   Re-derive from `test_n_rows` in `training_metrics.json` using the same chronological tail. Only used if Tiers 1 and 2 cannot be reconstructed cleanly (e.g., CSV unavailable or row count mismatch).
+
+   The tier used is recorded in `calibration_audit.json["split_tier"]` (values: `"year_holdout"`, `"last_15pct"`, `"stored_test"`). This prevents double-evaluation inconsistencies and ensures calibration metrics use a single, documented denominator per city.
+
+   After split reconstruction: re-apply `WeatherDataPreprocessorV2` (loaded from `preprocessor_v2.joblib`), apply FusionModel to reconstruct uncalibrated probabilities for the split.
 3. Compute:
    - `pre_calibration_ece_test`: ECE before isotonic transform (raw fusion probabilities vs test labels)
    - `post_calibration_ece_test`: ECE after isotonic transform on test set
@@ -309,6 +330,21 @@ The three uncertainty lanes in the final response are:
 ```
 
 `calibration_ece_after` is never overwritten. `calibration_ece_cal_set` is added as an alias with the same value, clarifying semantics. `calibration_ece_test_set` is the new independent metric.
+
+---
+
+### 4.8 Observability Contract — MC Success Rate
+
+`degraded_reason` and `inference_mode` give per-request visibility. At the system level, the following spec-level monitor is required (implementation deferred to Group D — Operational Resilience, but architected for here):
+
+**`MC_SUCCESS_RATE` per city, rolling 100-request window:**
+- Computed as: `(requests with inference_mode="mc_dropout") / total_requests`
+- Alert threshold: `MC_SUCCESS_RATE < 0.90` for any city → `WARNING` log + surfaced in `/health` response
+- Alert threshold: `MC_SUCCESS_RATE < 0.70` → `ERROR` log; consider auto-disabling MC for that city
+
+This metric catches **silent fallback dominance** — the scenario where MC inference is nominally enabled but consistently timing out or failing, causing every live prediction to silently degrade to deterministic while `inference_mode` logging goes unnoticed in production.
+
+The rolling window counter is in-memory per city in `CityModelService`. No Redis or DB dependency.
 
 ---
 
