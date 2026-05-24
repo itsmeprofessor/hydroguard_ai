@@ -33,12 +33,29 @@ from uuid import uuid4
 
 import numpy as np
 
-from app.core.config import DATA_DIR, MODELS_DIR
+from app.core.config import DATA_DIR, MODELS_DIR, MCInferenceConfig
 from app.ml.models.city_hybrid import CityHybridModel
 from app.ml.models.tcn import TCN_SEQ_LEN
 SEQUENCE_LENGTH = TCN_SEQ_LEN  # 24 — keep backward-compat name
 
 logger = logging.getLogger(__name__)
+
+# Semaphore bounds concurrent TF thread-pool workers across all city requests.
+_mc_semaphore: asyncio.Semaphore = asyncio.Semaphore(MCInferenceConfig.MAX_CONCURRENT_THREADS)
+
+# Rolling 100-request MC success rate per city (in-memory, no DB/Redis dependency).
+# Key: city slug; Value: deque of bools (True=mc_dropout completed, False=fallback).
+_mc_success_window: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
+
+
+def _classify_prediction_stability(epistemic_uncertainty: float) -> str:
+    """Map epistemic uncertainty to a human-readable stability tier."""
+    if epistemic_uncertainty > MCInferenceConfig.STABILITY_THRESHOLD_HIGH:
+        return "high_uncertainty"
+    if epistemic_uncertainty > MCInferenceConfig.STABILITY_THRESHOLD_MODERATE:
+        return "moderate_uncertainty"
+    return "stable"
+
 
 # ──────────────────────────────────────────────────────────
 #  Static metadata for KNOWN Pakistani cities.
@@ -47,12 +64,14 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────
 
 CITY_METADATA: Dict[str, Dict[str, Any]] = {
-    "islamabad":  {"name": "Islamabad",  "province": "Capital Territory", "pop": "1.1M",  "lat": 33.6844, "lon": 73.0479, "vulnerability": 0.80},
-    "rawalpindi": {"name": "Rawalpindi", "province": "Punjab",            "pop": "2.1M",  "lat": 33.5651, "lon": 73.0169, "vulnerability": 0.78},
-    "lahore":     {"name": "Lahore",     "province": "Punjab",            "pop": "13M",   "lat": 31.5497, "lon": 74.3436, "vulnerability": 0.75},
-    "karachi":    {"name": "Karachi",    "province": "Sindh",             "pop": "16M",   "lat": 24.8607, "lon": 67.0011, "vulnerability": 0.85},
-    "peshawar":   {"name": "Peshawar",   "province": "KPK",               "pop": "1.9M",  "lat": 34.0151, "lon": 71.5249, "vulnerability": 0.82},
-    "quetta":     {"name": "Quetta",     "province": "Balochistan",       "pop": "1.0M",  "lat": 30.1798, "lon": 66.9750, "vulnerability": 0.70},
+    # Enrichment-only: lat/lon/province used when city is discovered from CSV or models.
+    # This dict does NOT gate which cities appear — that is driven by the dataset.
+    "islamabad": {"name": "Islamabad", "province": "Capital Territory", "pop": "1.1M",  "lat": 33.6844, "lon": 73.0479, "vulnerability": 0.80},
+    "lahore":    {"name": "Lahore",    "province": "Punjab",            "pop": "13M",   "lat": 31.5497, "lon": 74.3436, "vulnerability": 0.75},
+    "karachi":   {"name": "Karachi",   "province": "Sindh",             "pop": "16M",   "lat": 24.8607, "lon": 67.0011, "vulnerability": 0.85},
+    "peshawar":  {"name": "Peshawar",  "province": "KPK",               "pop": "1.9M",  "lat": 34.0151, "lon": 71.5249, "vulnerability": 0.82},
+    "quetta":    {"name": "Quetta",    "province": "Balochistan",       "pop": "1.0M",  "lat": 30.1798, "lon": 66.9750, "vulnerability": 0.70},
+    "gilgit":    {"name": "Gilgit",    "province": "Gilgit-Baltistan",  "pop": "0.3M",  "lat": 35.9220, "lon": 74.3087, "vulnerability": 0.90},
 }
 
 DEFAULT_METADATA: Dict[str, Any] = {
@@ -199,6 +218,11 @@ class _CityBuffer:
             for r in rows:
                 self._bufs[city_slug].append(r.astype(float))
 
+    def fill_count(self, city_slug: str) -> int:
+        """Return how many observations are currently buffered for this city."""
+        with self._lock:
+            return len(self._bufs[city_slug])
+
 
 # ──────────────────────────────────────────────────────────
 #  City Model Service
@@ -213,6 +237,47 @@ class CityModelService:
       - call to refresh_registry()  (e.g. after training a new city)
     """
 
+    # Default alert threshold — overridden per-city by training_metrics.json
+    _DEFAULT_ALERT_THRESHOLD = 0.40
+
+    # 5-tier alert ladder keyed to calibrated event_probability
+    # Each tier includes the minimum recommended action for civil authorities.
+    _ALERT_TIERS: Dict[str, Any] = {
+        "clear":      {"min": 0.00, "max": 0.25, "level": 0, "label": "All Clear",
+                       "color": "green",  "action": "Normal conditions. Monitor routine forecasts."},
+        "watch":      {"min": 0.25, "max": 0.40, "level": 1, "label": "Flood Watch",
+                       "color": "yellow", "action": "Elevated risk. Review emergency contacts. Avoid flood-prone areas."},
+        "warning":    {"min": 0.40, "max": 0.60, "level": 2, "label": "Flood Warning",
+                       "color": "orange", "action": "High risk. Move valuables to upper floors. Prepare evacuation route."},
+        "emergency":  {"min": 0.60, "max": 0.80, "level": 3, "label": "Emergency Alert",
+                       "color": "red",    "action": "Imminent danger. Begin evacuation. Contact rescue services."},
+        "evacuation": {"min": 0.80, "max": 1.01, "level": 4, "label": "Evacuate Now",
+                       "color": "purple", "action": "CRITICAL. Evacuate immediately. Call Rescue 1122."},
+    }
+
+    @classmethod
+    def _compute_alert_tier(cls, p: float, alert_threshold: float) -> Dict[str, Any]:
+        """Map calibrated event_probability to a 5-tier alert dict.
+        The alert_threshold anchors the Watch→Warning boundary per city.
+        """
+        # Shift tier boundaries so they track the per-city alert threshold
+        tier_boundaries = [
+            ("clear",      0.0,                   alert_threshold * 0.625),
+            ("watch",      alert_threshold * 0.625, alert_threshold),
+            ("warning",    alert_threshold,         alert_threshold * 1.50),
+            ("emergency",  alert_threshold * 1.50,  alert_threshold * 2.00),
+            ("evacuation", alert_threshold * 2.00,  1.01),
+        ]
+        for name, lo, hi in tier_boundaries:
+            if lo <= p < hi:
+                t = cls._ALERT_TIERS[name].copy()
+                t["tier"] = name
+                return t
+        # p >= 1.0 edge case
+        t = cls._ALERT_TIERS["evacuation"].copy()
+        t["tier"] = "evacuation"
+        return t
+
     def __init__(self):
         self._models:        Dict[str, CityHybridModel] = {}
         self._preprocessors: Dict[str, Any]              = {}   # slug → fitted WeatherDataPreprocessor
@@ -220,11 +285,12 @@ class CityModelService:
         self._registry:      Dict[str, Dict[str, Any]]   = {}
         self._buf = _CityBuffer()
         self._global_lock = Lock()
-        self._alert_log: Dict[str, deque] = defaultdict(lambda: deque(maxlen=20))
-        self._fusion_models:     Dict[str, Any] = {}   # slug -> FusionModel
-        self._calibrators:       Dict[str, Any] = {}   # slug -> IsotonicCalibrator
-        self._ood_detectors:     Dict[str, Any] = {}   # slug -> OODDetector
-        # Initial discovery
+        self._alert_log:       Dict[str, deque] = defaultdict(lambda: deque(maxlen=20))
+        self._fusion_models:   Dict[str, Any]   = {}   # slug -> FusionModel
+        self._calibrators:     Dict[str, Any]   = {}   # slug -> IsotonicCalibrator
+        self._ood_detectors:   Dict[str, Any]   = {}   # slug -> OODDetector
+        self._city_thresholds: Dict[str, float] = {}   # slug -> optimal alert threshold (from metrics)
+        # Initial discovery — also calls _load_city_thresholds()
         self.refresh_registry()
 
     # ──────────────────────────────────────────────────────
@@ -240,8 +306,9 @@ class CityModelService:
 
         csv_cities = _discover_cities_from_csv(csv_path)
         trained    = _discover_trained_cities()
-        # Union: a city exists if it has data OR a trained model (metadata is
-        # only used for enrichment, not gating).
+        # Union: a city exists if it has data in the CSV OR a trained model.
+        # CITY_METADATA is used only for enrichment (lat/lon/province/etc),
+        # never as a source of city slugs — city list is fully dynamic.
         all_slugs  = csv_cities | trained
 
         registry: Dict[str, Dict[str, Any]] = {}
@@ -263,7 +330,38 @@ class CityModelService:
             "City registry refreshed: %d cities total · %d in CSV · %d trained",
             len(registry), len(csv_cities), len(trained),
         )
+        # Reload per-city thresholds whenever registry is refreshed
+        if hasattr(self, "_city_thresholds"):
+            self._load_city_thresholds()
         return registry
+
+    def _load_city_thresholds(self) -> None:
+        """Read per-city optimal alert thresholds from training_metrics.json files.
+        Falls back to _DEFAULT_ALERT_THRESHOLD when the file is absent or malformed.
+        Called once on startup and after each training run.
+        """
+        import json as _json
+        loaded = 0
+        for slug in self._registry:
+            metrics_path = CITY_MODELS_DIR / slug / "training_metrics.json"
+            if metrics_path.exists():
+                try:
+                    m   = _json.loads(metrics_path.read_text())
+                    thr = m.get("optimal_threshold")
+                    if isinstance(thr, (int, float)) and 0.01 < float(thr) < 1.0:
+                        self._city_thresholds[slug] = float(thr)
+                        loaded += 1
+                except Exception as exc:
+                    logger.debug("[%s] Could not read optimal_threshold: %s", slug, exc)
+        logger.info(
+            "Per-city alert thresholds loaded: %d/%d cities "
+            "(others use default %.2f)",
+            loaded, len(self._registry), self._DEFAULT_ALERT_THRESHOLD,
+        )
+
+    def _get_alert_threshold(self, slug: str) -> float:
+        """Return the calibrated alert threshold for a city (or global default)."""
+        return self._city_thresholds.get(slug, self._DEFAULT_ALERT_THRESHOLD)
 
     def list_cities(self) -> List[Dict[str, Any]]:
         """Return metadata for every discovered city."""
@@ -393,8 +491,10 @@ class CityModelService:
             if lgbm_path.exists():
                 self._fusion_models[slug] = FusionModel.load(lgbm_path)
                 logger.info("[%s] FusionModel loaded", slug)
+            else:
+                logger.warning("[%s] lgbm_model.pkl not found at %s", slug, lgbm_path)
         except Exception as exc:
-            logger.debug("[%s] FusionModel load failed: %s", slug, exc)
+            logger.warning("[%s] FusionModel load failed: %s", slug, exc)
 
         try:
             from app.ml.calibration.isotonic import IsotonicCalibrator
@@ -625,14 +725,26 @@ class CityModelService:
                 "uncertainty":         0.30,
                 "model_entropy":       None,
                 "risk_band":           risk_band,
-                "is_alert":            p_event > 0.40,
+                "hri_score":           {"Low": 12, "Moderate": 40, "High": 68, "Severe": 88}.get(risk_band, 12),
+                "is_alert":            p_event > self._get_alert_threshold(slug),
+                "alert_threshold":     round(self._get_alert_threshold(slug), 4),
+                "alert_tier":          self._compute_alert_tier(p_event, self._get_alert_threshold(slug)),
                 "component_scores":    None,
                 "drivers":             None,
                 "weather_inputs":      {
                     k: raw_weather.get(k)
-                    for k in ["prcp","humidity","pressure","cloud_cover","tmax","tmin"]
+                    for k in ["prcp","humidity","pressure","cloud_cover","tmax","tmin","tavg"]
                 },
                 "climatology_context": None,
+                "inference_mode":          "deterministic",
+                "uncertainty_available":   False,
+                "epistemic_uncertainty":   None,
+                "model_uncertainty_score": None,
+                "prediction_stability":    None,
+                "mc_samples_requested":    None,
+                "mc_samples_completed":    None,
+                "uncertainty_strategy":    None,
+                "degraded_reason":         "heuristic_source",
             }
 
         # ---- Preprocess ----
@@ -649,21 +761,110 @@ class CityModelService:
         # ---- Rolling window for TCN ----
         sequence = self._buf.push_and_get(slug, x_vec)
 
-        # ---- AE + TCN branch scoring (async) ----
-        try:
-            raw_scores = await asyncio.to_thread(model.predict, x_vec, sequence)
-        except Exception as exc:
-            logger.error("[%s] Branch inference failed: %s", slug, exc)
-            raw_scores = {
-                "ae_percentile": 0.0, "tcn_percentile": 0.0,
-                "ae_variance": 0.5,   "tcn_variance": 0.5,
-                "ae_error_raw": 0.0,  "tcn_error_raw": 0.0,
-            }
+        # ---- AE + TCN branch scoring ----
+        import time as _time
+        _branch_t0 = _time.perf_counter()
 
-        ae_pct  = raw_scores["ae_percentile"]
-        tcn_pct = raw_scores["tcn_percentile"]
-        ae_var  = raw_scores["ae_variance"]
-        tcn_var = raw_scores["tcn_variance"]
+        inference_mode        = "deterministic"
+        uncertainty_available = False
+        epistemic_uncertainty: Optional[float] = None
+        model_uncertainty_score: Optional[float] = None
+        prediction_stability: Optional[str] = None
+        mc_samples_used       = 1
+        degraded_reason: Optional[str] = None
+        ae_mc_latency_ms      = 0.0
+        ae_result: Dict[str, Any] = {}
+        tcn_result: Dict[str, Any] = {}
+
+        if MCInferenceConfig.ENABLED:
+            # Immutable snapshot — _CityBuffer is never passed into branch methods
+            seq_snapshot = sequence.copy() if sequence is not None else None
+
+            ae_fn, tcn_fn = model.prepare_mc_tasks(
+                x_vec, seq_snapshot,
+                MCInferenceConfig.DROPOUT_SAMPLES,
+                MCInferenceConfig.UNCERTAINTY_MIN,
+                MCInferenceConfig.UNCERTAINTY_MAX,
+            )
+            _gather_t0 = _time.perf_counter()
+            try:
+                async with _mc_semaphore:
+                    ae_result, tcn_result = await asyncio.wait_for(
+                        asyncio.gather(
+                            asyncio.to_thread(ae_fn),
+                            asyncio.to_thread(tcn_fn),
+                        ),
+                        timeout=MCInferenceConfig.INFERENCE_TIMEOUT_MS / 1000.0,
+                    )
+                ae_mc_latency_ms = (_time.perf_counter() - _gather_t0) * 1000
+
+                # Deterministic uncertainty merge (documented heuristic weighted blend)
+                epistemic_uncertainty = float(np.clip(
+                    MCInferenceConfig.AE_UNCERTAINTY_WEIGHT * ae_result["ae_uncertainty"]
+                    + MCInferenceConfig.TCN_UNCERTAINTY_WEIGHT * tcn_result["tcn_uncertainty"],
+                    MCInferenceConfig.UNCERTAINTY_MIN,
+                    MCInferenceConfig.UNCERTAINTY_MAX,
+                ))
+                model_uncertainty_score = epistemic_uncertainty
+                prediction_stability    = _classify_prediction_stability(epistemic_uncertainty)
+                inference_mode          = "mc_dropout"
+                uncertainty_available   = True
+                mc_samples_used         = MCInferenceConfig.DROPOUT_SAMPLES
+                _mc_success_window[slug].append(True)
+
+                total_elapsed_ms = (_time.perf_counter() - _branch_t0) * 1000
+                if total_elapsed_ms > MCInferenceConfig.INFERENCE_TIMEOUT_MS * 0.75:
+                    logger.info(
+                        "[%s] MC inference approaching timeout budget: %.0fms / %dms",
+                        slug, total_elapsed_ms, MCInferenceConfig.INFERENCE_TIMEOUT_MS,
+                    )
+
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "[%s] MC inference timeout (>%dms) — falling back to deterministic",
+                    slug, MCInferenceConfig.INFERENCE_TIMEOUT_MS,
+                )
+                degraded_reason = "timeout"
+                inference_mode  = "fallback_deterministic"
+                _mc_success_window[slug].append(False)
+            except Exception as exc:
+                logger.warning("[%s] MC inference exception — falling back: %s", slug, exc)
+                degraded_reason = "exception"
+                inference_mode  = "fallback_deterministic"
+                _mc_success_window[slug].append(False)
+        else:
+            degraded_reason = "disabled"
+
+        # MC success rate monitoring (in-memory rolling window)
+        _win = _mc_success_window[slug]
+        if len(_win) >= 10:
+            mc_rate = sum(_win) / len(_win)
+            if mc_rate < 0.70:
+                logger.error("[%s] MC success rate critically low: %.0f%%", slug, mc_rate * 100)
+            elif mc_rate < 0.90:
+                logger.warning("[%s] MC success rate degraded: %.0f%%", slug, mc_rate * 100)
+
+        # Point-estimate scores from MC result (or deterministic fallback)
+        if ae_result and tcn_result:
+            ae_pct  = ae_result.get("ae_percentile", 0.0)
+            tcn_pct = tcn_result.get("tcn_percentile", 0.0)
+            ae_var  = ae_result.get("ae_variance", 0.5)
+            tcn_var = tcn_result.get("tcn_variance", 0.5)
+        else:
+            # Flag off or MC failed — deterministic fallback
+            try:
+                raw_scores = await asyncio.to_thread(model.predict, x_vec, sequence)
+            except Exception as exc:
+                logger.error("[%s] Deterministic branch also failed: %s", slug, exc)
+                raw_scores = {
+                    "ae_percentile": 0.0, "tcn_percentile": 0.0,
+                    "ae_variance": 0.5,   "tcn_variance": 0.5,
+                    "ae_error_raw": 0.0,  "tcn_error_raw": 0.0,
+                }
+            ae_pct  = raw_scores["ae_percentile"]
+            tcn_pct = raw_scores["tcn_percentile"]
+            ae_var  = raw_scores["ae_variance"]
+            tcn_var = raw_scores["tcn_variance"]
 
         # ---- Fusion (LightGBM) ----
         fusion = self._fusion_models.get(slug)
@@ -677,7 +878,7 @@ class CityModelService:
                                      "ae_variance": ae_var, "tcn_variance": tcn_var})
                 p_raw = await asyncio.to_thread(fusion.predict_scalar, fusion_input)
             except Exception as exc:
-                logger.debug("[%s] Fusion model failed: %s", slug, exc)
+                logger.warning("[%s] Fusion model failed: %s", slug, exc)
 
         # ---- Calibration ----
         calibrator = self._calibrators.get(slug)
@@ -690,6 +891,12 @@ class CityModelService:
             try:
                 p_calib = float(calibrator.transform(p_raw))
                 ci_lo, ci_hi = calibrator.confidence_interval(p_calib)
+                # If bootstrap collapsed to zero-width (common for very low-risk cases),
+                # fall back to a variance-based interval so the UI has meaningful bounds.
+                if ci_lo == 0.0 and ci_hi == 0.0:
+                    half  = float(np.clip(p_calib * (1 - p_calib) * 4 + 0.04, 0.03, 0.20))
+                    ci_lo = float(max(0.0, p_calib - half))
+                    ci_hi = float(min(1.0, p_calib + half))
                 uncertainty  = calibrator.compute_uncertainty(p_calib, ae_var, tcn_var)
                 model_entropy_val = calibrator.model_entropy(p_calib)
             except Exception as exc:
@@ -705,17 +912,26 @@ class CityModelService:
                                          "ae_variance": ae_var, "tcn_variance": tcn_var}
                 )
                 if shap_dict:
-                    drivers = [{"feature": k, "shap": v, "value": float(feat_dict.get(k, 0.0) or 0.0)}
-                               for k, v in shap_dict.items()]
+                    _branch = {"ae_percentile": ae_pct, "tcn_percentile": tcn_pct,
+                                "ae_variance": ae_var, "tcn_variance": tcn_var}
+                    drivers = [
+                        {"feature": k, "shap": v,
+                         "value": float(_branch.get(k) if k in _branch else (feat_dict.get(k, 0.0) or 0.0))}
+                        for k, v in shap_dict.items()
+                    ]
             except Exception as exc:
-                logger.debug("[%s] SHAP failed: %s", slug, exc)
+                logger.warning("[%s] SHAP failed: %s", slug, exc)
 
         # ---- Risk band ----
         if p_calib < 0.25:   risk_band = "Low"
         elif p_calib < 0.50: risk_band = "Moderate"
         elif p_calib < 0.75: risk_band = "High"
         else:                 risk_band = "Severe"
-        is_alert = p_calib >= 0.50
+        # Per-city optimal threshold loaded from training_metrics.json (PR-curve optimized)
+        alert_threshold = self._get_alert_threshold(slug)
+        is_alert    = p_calib >= alert_threshold
+        hri_score   = {"Low": 12, "Moderate": 40, "High": 68, "Severe": 88, "Evac": 95}.get(risk_band, 12)
+        alert_tier  = self._compute_alert_tier(p_calib, alert_threshold)
 
         # ---- Alert log (reuse existing mechanism) ----
         if is_alert:
@@ -738,7 +954,10 @@ class CityModelService:
             "uncertainty":         round(uncertainty, 4),
             "model_entropy":       round(model_entropy_val, 4) if model_entropy_val else None,
             "risk_band":           risk_band,
+            "hri_score":           hri_score,
             "is_alert":            is_alert,
+            "alert_threshold":     round(alert_threshold, 4),
+            "alert_tier":          alert_tier,
             "component_scores":    {
                 "ae_percentile":  round(ae_pct,  4),
                 "tcn_percentile": round(tcn_pct, 4),
@@ -748,7 +967,7 @@ class CityModelService:
             },
             "drivers":             drivers,
             "weather_inputs":      {
-                k: raw_weather.get(k) for k in ["prcp","humidity","pressure","cloud_cover","tmax","tmin"]
+                k: raw_weather.get(k) for k in ["prcp","humidity","pressure","cloud_cover","tmax","tmin","tavg"]
             },
             "climatology_context": {
                 "prcp_climo_pct":    round(float(feat_dict.get("prcp_climo_pct", 1.0)), 3),
@@ -756,6 +975,31 @@ class CityModelService:
                 "humidity_climo_pct":round(float(feat_dict.get("humidity_climo_pct", 1.0)), 3),
                 "pressure_delta_3h": feat_dict.get("pressure_delta_3h"),
             },
+            # Karachi coastal feature signals (null for other cities)
+            "coastal_features": {
+                k: (round(float(feat_dict[k]), 4) if isinstance(feat_dict.get(k), (int, float)) else None)
+                for k in [
+                    "sst_anomaly", "sea_breeze_instability", "cyclone_proximity",
+                    "humidity_persistence", "coastal_moisture_flux", "urban_drainage_stress",
+                    "tidal_proxy", "coastal_pressure_grad", "cyclone_season",
+                ]
+            } if slug == "karachi" else None,
+            # Sequence context — how many observations the TCN has seen since startup
+            "sequence_context": {
+                "buffer_size":    len(self._buf._bufs.get(slug, [])),
+                "required_size":  SEQUENCE_LENGTH,
+                "tcn_active":     len(self._buf._bufs.get(slug, [])) >= SEQUENCE_LENGTH,
+            },
+            # MC Dropout fields — None when flag off or fallback triggered
+            "inference_mode":          inference_mode,
+            "uncertainty_available":   uncertainty_available,
+            "epistemic_uncertainty":   round(epistemic_uncertainty, 4) if epistemic_uncertainty is not None else None,
+            "model_uncertainty_score": round(model_uncertainty_score, 4) if model_uncertainty_score is not None else None,
+            "prediction_stability":    prediction_stability,
+            "mc_samples_requested":    MCInferenceConfig.DROPOUT_SAMPLES if MCInferenceConfig.ENABLED else None,
+            "mc_samples_completed":    mc_samples_used if uncertainty_available else None,
+            "uncertainty_strategy":    MCInferenceConfig.UNCERTAINTY_STRATEGY if MCInferenceConfig.ENABLED else None,
+            "degraded_reason":         degraded_reason,
         }
 
     # Slugs of cities that the v3.2 fusion model was trained to weight more
@@ -1057,6 +1301,56 @@ class CityModelService:
             "loaded_in_memory": list(self._models.keys()),
             "no_data":          sorted(set(trained) - set(with_csv)),
         }
+
+    async def warm_up_tcn_buffers(self) -> None:
+        """
+        Seed the TCN rolling buffer for every trained city on startup.
+
+        Strategy: fetch live weather for each city, preprocess it through
+        the city's own preprocessor, then repeat the vector seq_len times
+        to fill the buffer with current-conditions baseline.
+        This is far better than a cold start (tcn_percentile=0.0 for 30
+        calls) — the model immediately scores against realistic context.
+        """
+        trained_slugs = [
+            s for s in self._registry
+            if self._registry[s].get("has_model")
+        ]
+        if not trained_slugs:
+            return
+
+        try:
+            from app.services.weather_api import weather_provider
+        except Exception:
+            logger.warning("TCN warm-up: WeatherAPI unavailable — skipping")
+            return
+
+        if weather_provider is None:
+            logger.info("TCN warm-up: no weather provider configured — skipping")
+            return
+
+        warmed = 0
+        for slug in trained_slugs:
+            try:
+                preprocessor = self._preprocessors.get(slug)
+                if preprocessor is None:
+                    self.get_model(slug)          # triggers lazy-load which populates preprocessor
+                    preprocessor = self._preprocessors.get(slug)
+                if preprocessor is None:
+                    continue
+
+                snap    = await weather_provider.get_current(slug)
+                raw     = snap.to_feature_dict()
+                x_vec   = self._preprocess(raw, preprocessor, slug=slug)
+                # Seed with seq_len copies of current conditions
+                seed_rows = np.tile(x_vec, (SEQUENCE_LENGTH, 1))
+                self._buf.seed(slug, seed_rows)
+                warmed += 1
+                logger.info("[%s] TCN buffer seeded with current weather (%d steps)", slug, SEQUENCE_LENGTH)
+            except Exception as exc:
+                logger.debug("[%s] TCN warm-up failed: %s", slug, exc)
+
+        logger.info("TCN warm-up complete: %d/%d cities seeded", warmed, len(trained_slugs))
 
 
 # ──────────────────────────────────────────────────────────
