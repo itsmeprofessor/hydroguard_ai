@@ -38,5 +38,18 @@
   "holdout_far": 0.0379,
   "holdout_n_rows": 731,
   "operational_metrics_path": "backend\\saved_models\\city_models\\lahore.tmp\\operational_metrics.json",
-  "duration_seconds": 205.8
+  "duration_seconds": 205.8,
+  "optimal_threshold": 0.3868,
+  "threshold_precision": 0.1833,
+  "threshold_recall": 0.7333,
+  "threshold_f1": 0.2933,
+  "threshold_strategy": "max_precision_at_recall_0.7",
+  "threshold_min_recall": 0.7,
+  "threshold_used": 0.3868,
+  "holdout_strategy": "year_2023_plus",
+  "calibration_ece_cal_set": 0.0,
+  "calibration_ece_test_set": 0.043771,
+  "calibration_brier_test_after": 0.07591,
+  "calibration_bins_used": 15,
+  "calibration_audit_path": "backend/saved_models/city_models/lahore/calibration_audit.json"
 }

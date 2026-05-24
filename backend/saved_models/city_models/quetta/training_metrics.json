@@ -38,5 +38,18 @@
   "holdout_far": 0.0059,
   "holdout_n_rows": 731,
   "operational_metrics_path": "backend\\saved_models\\city_models\\quetta.tmp\\operational_metrics.json",
-  "duration_seconds": 342.8
+  "duration_seconds": 342.8,
+  "optimal_threshold": 0.4974,
+  "threshold_precision": 0.75,
+  "threshold_recall": 1.0,
+  "threshold_f1": 0.8571,
+  "threshold_strategy": "max_precision_at_recall_0.7",
+  "threshold_min_recall": 0.7,
+  "threshold_used": 0.4974,
+  "holdout_strategy": "year_2023_plus",
+  "calibration_ece_cal_set": 0.0,
+  "calibration_ece_test_set": 0.025751,
+  "calibration_brier_test_after": 0.0256,
+  "calibration_bins_used": 15,
+  "calibration_audit_path": "backend/saved_models/city_models/quetta/calibration_audit.json"
 }

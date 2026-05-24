@@ -1,0 +1,96 @@
+{
+  "audit_version": "1.0",
+  "pipeline_version": "v3.5",
+  "generated_at": "2026-05-24T17:21:07.366093+00:00",
+  "city_slug": "quetta",
+  "calibration_method": "isotonic",
+  "calibration_ece_cal_set": 0.0,
+  "pre_calibration_ece_test": 0.095526,
+  "post_calibration_ece_test": 0.025751,
+  "pre_calibration_brier_test": 0.069863,
+  "post_calibration_brier_test": 0.0256,
+  "calibration_improvement": 0.069774,
+  "bin_populations": [
+    682,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    48
+  ],
+  "reliability_curve": [
+    {
+      "predicted": 0.0,
+      "actual": 0.016129032258064516
+    },
+    {
+      "predicted": 0.1,
+      "actual": null
+    },
+    {
+      "predicted": 0.16666666666666669,
+      "actual": null
+    },
+    {
+      "predicted": 0.23333333333333334,
+      "actual": null
+    },
+    {
+      "predicted": 0.3,
+      "actual": null
+    },
+    {
+      "predicted": 0.3666666666666667,
+      "actual": null
+    },
+    {
+      "predicted": 0.43333333333333335,
+      "actual": null
+    },
+    {
+      "predicted": 0.5,
+      "actual": null
+    },
+    {
+      "predicted": 0.5666666666666667,
+      "actual": null
+    },
+    {
+      "predicted": 0.6333333333333333,
+      "actual": null
+    },
+    {
+      "predicted": 0.7,
+      "actual": null
+    },
+    {
+      "predicted": 0.7666666666666666,
+      "actual": null
+    },
+    {
+      "predicted": 0.8443351530981242,
+      "actual": 0.0
+    },
+    {
+      "predicted": 0.9,
+      "actual": null
+    },
+    {
+      "predicted": 0.9995800979049871,
+      "actual": 0.8541666666666666
+    }
+  ],
+  "calibration_bins_used": 15,
+  "split_tier": "year_holdout",
+  "eval_rows": 731,
+  "notes": ""
+}

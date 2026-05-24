@@ -32,5 +32,18 @@
   "fusion_vs_test_gap": 0.0256,
   "gap_flag": "LOW",
   "operational_metrics_path": null,
-  "duration_seconds": 414.4
+  "duration_seconds": 414.4,
+  "optimal_threshold": 0.4896,
+  "threshold_precision": 0.55,
+  "threshold_recall": 0.7857,
+  "threshold_f1": 0.6471,
+  "threshold_strategy": "max_precision_at_recall_0.7",
+  "threshold_min_recall": 0.7,
+  "threshold_used": 0.4896,
+  "holdout_strategy": "last_15pct_fallback",
+  "calibration_ece_cal_set": 0.0,
+  "calibration_ece_test_set": 0.0294,
+  "calibration_brier_test_after": 0.038419,
+  "calibration_bins_used": 15,
+  "calibration_audit_path": "backend/saved_models/city_models/gilgit/calibration_audit.json"
 }

@@ -38,5 +38,18 @@
   "holdout_far": 0.0171,
   "holdout_n_rows": 731,
   "operational_metrics_path": "backend\\saved_models\\city_models\\islamabad.tmp\\operational_metrics.json",
-  "duration_seconds": 432.0
+  "duration_seconds": 432.0,
+  "optimal_threshold": 0.4722,
+  "threshold_precision": 0.3182,
+  "threshold_recall": 0.7,
+  "threshold_f1": 0.4375,
+  "threshold_strategy": "max_precision_at_recall_0.7",
+  "threshold_min_recall": 0.7,
+  "threshold_used": 0.4722,
+  "holdout_strategy": "year_2023_plus",
+  "calibration_ece_cal_set": 0.0,
+  "calibration_ece_test_set": 0.033906,
+  "calibration_brier_test_after": 0.040033,
+  "calibration_bins_used": 15,
+  "calibration_audit_path": "backend/saved_models/city_models/islamabad/calibration_audit.json"
 }

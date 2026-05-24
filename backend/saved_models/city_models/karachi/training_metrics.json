@@ -32,5 +32,18 @@
   "fusion_vs_test_gap": -0.2027,
   "gap_flag": "HIGH",
   "operational_metrics_path": null,
-  "duration_seconds": 356.1
+  "duration_seconds": 356.1,
+  "optimal_threshold": 0.2857,
+  "threshold_precision": 0.0933,
+  "threshold_recall": 0.7447,
+  "threshold_f1": 0.1659,
+  "threshold_strategy": "max_precision_at_recall_0.7",
+  "threshold_min_recall": 0.7,
+  "threshold_used": 0.2857,
+  "holdout_strategy": "last_15pct_fallback",
+  "calibration_ece_cal_set": 0.0,
+  "calibration_ece_test_set": 0.082286,
+  "calibration_brier_test_after": 0.072923,
+  "calibration_bins_used": 15,
+  "calibration_audit_path": "backend/saved_models/city_models/karachi/calibration_audit.json"
 }
