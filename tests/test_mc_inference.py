@@ -60,23 +60,7 @@ def sample_seq(input_dim, seq_len):
 
 
 # ---------------------------------------------------------------------------
-#  Test 1 (warm-up): prepare_mc_tasks returns callables
-# ---------------------------------------------------------------------------
-
-def test_prepare_mc_tasks_returns_callables(sample_x, sample_seq, mc_cfg):
-    model = _make_model()
-    ae_fn, tcn_fn = model.prepare_mc_tasks(
-        sample_x, sample_seq,
-        n_samples=2,
-        uncertainty_min=mc_cfg.UNCERTAINTY_MIN,
-        uncertainty_max=mc_cfg.UNCERTAINTY_MAX,
-    )
-    assert callable(ae_fn)
-    assert callable(tcn_fn)
-
-
-# ---------------------------------------------------------------------------
-#  Test 1 (named): mc_branches_independent
+#  Test 1: mc_branches_independent
 # ---------------------------------------------------------------------------
 
 def test_mc_branches_independent(sample_x, sample_seq, mc_cfg):
@@ -154,7 +138,7 @@ async def test_predict_v2_flag_disabled():
 
     assert result.get("inference_mode") == "deterministic"
     assert result.get("epistemic_uncertainty") is None
-    assert result.get("uncertainty_available") in (False, None)
+    assert result.get("uncertainty_available") is False
     assert result.get("degraded_reason") == "disabled"
 
 
@@ -351,10 +335,12 @@ def test_calibration_audit_readonly():
         pytest.skip("calibration_audit.py not yet written")
 
     t_before = time.time()
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, str(script), "--city", "islamabad", "--dry-run"],
         capture_output=True, text=True
     )
+    assert result.returncode == 0, \
+        f"calibration_audit.py --dry-run failed:\n{result.stderr}"
 
     # Verify no .pkl or .keras files were written/touched after test started
     for bad_ext in ("*.pkl", "*.keras"):
