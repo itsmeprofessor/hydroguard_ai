@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import sys
+import tempfile
 import types
 from datetime import datetime, timezone
 from pathlib import Path
@@ -257,6 +258,14 @@ def _score_oof(
     return ae_pcts, tcn_pcts, ae_vars, tcn_vars
 
 
+def _safe_float(v) -> float:
+    try:
+        f = float(v)
+        return f if not np.isnan(f) else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _fusion_matrix(
     df_split: pd.DataFrame,
     ae_p, tcn_p, ae_v, tcn_v,
@@ -265,7 +274,7 @@ def _fusion_matrix(
     rows = df_split.to_dict("records")
     mat  = []
     for row, ap, tp, av, tv in zip(rows, ae_p, tcn_p, ae_v, tcn_v):
-        d = {f: float(row.get(f, 0.0) or 0.0) for f in features
+        d = {f: _safe_float(row.get(f)) for f in features
              if f not in ("ae_percentile", "tcn_percentile", "ae_variance", "tcn_variance")}
         d.update({"ae_percentile": ap, "tcn_percentile": tp,
                   "ae_variance":   av, "tcn_variance":   tv})
@@ -414,11 +423,10 @@ def audit_city(slug: str, dry_run: bool = False) -> dict:
 
     # ── Load artefacts ────────────────────────────────────────────────────────
     import joblib
-    from app.ml.models.city_hybrid   import CityHybridModel
-    from app.ml.models.fusion        import FusionModel, FUSION_FEATURES
-    from app.ml.calibration.isotonic import IsotonicCalibrator
-    from app.ml.models.tcn           import TCN_SEQ_LEN
-    from app.core.config             import MCInferenceConfig
+    from app.core.config import MCInferenceConfig
+    from app.ml.models.city_hybrid import CityHybridModel
+    from app.ml.models.fusion import FUSION_FEATURES
+    from app.ml.models.tcn import TCN_SEQ_LEN
 
     n_ece_bins = MCInferenceConfig.CALIBRATION_ECE_BINS  # default 15
 
@@ -512,7 +520,7 @@ def audit_city(slug: str, dry_run: bool = False) -> dict:
         p_cal = np.asarray(p_cal, dtype=float)
 
     # ── Compute metrics ───────────────────────────────────────────────────────
-    pre_ece,  bin_pops_pre,  _               = _ece(p_raw, y_masked, n_ece_bins)
+    pre_ece,  _,  _               = _ece(p_raw, y_masked, n_ece_bins)
     post_ece, bin_pops_post, reliability     = _ece(p_cal, y_masked, n_ece_bins)
     pre_brier  = _brier(p_raw, y_masked)
     post_brier = _brier(p_cal, y_masked)
@@ -571,8 +579,17 @@ def audit_city(slug: str, dry_run: bool = False) -> dict:
             metrics[key] = val
             updated = True
     if updated:
-        with open(metrics_path, "w", encoding="utf-8") as fh:
-            json.dump(metrics, fh, indent=2)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=city_dir, suffix=".json.tmp")
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                json.dump(metrics, fh, indent=2)
+            Path(tmp_path).replace(metrics_path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
         logger.info("[%s] Appended new fields to training_metrics.json", slug)
     else:
         logger.info("[%s] training_metrics.json already has all audit fields — skipped", slug)
