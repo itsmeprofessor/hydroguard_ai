@@ -93,6 +93,10 @@ _DEFAULT_WEIGHT = 1.0
 # MC Dropout samples for uncertainty estimation
 MC_DROPOUT_SAMPLES = 15
 
+# Epsilon guard for CoV: prevents division-by-zero when reconstruction error is near zero
+# (well-fitted model on fair-weather input). Applied BEFORE division, clip applied after.
+MC_COV_EPSILON: float = 1e-9
+
 
 # ----------------------------------------------------------------
 #  Autoencoder builder (unchanged)
@@ -399,65 +403,156 @@ class CityHybridModel:
         n_samples: int = MC_DROPOUT_SAMPLES,
     ) -> Dict[str, Any]:
         """
+        # INTERNAL / TEST ONLY — use prepare_mc_tasks() for production parallel dispatch.
+        # This method runs AE and TCN branches sequentially; calling it in the live
+        # inference path silently doubles latency relative to the parallel path.
+
         Monte Carlo Dropout inference for epistemic uncertainty estimation.
-
-        Runs n_samples stochastic forward passes (training=True activates dropout),
-        computes mean and variance across passes. High variance = the model is
-        uncertain about this input — a signal of potential extreme or out-of-
-        distribution atmospheric conditions.
-
-        Returns the same dict as predict() plus:
-          ae_uncertainty   : float [0,1] — coefficient of variation of AE errors
-          tcn_uncertainty  : float [0,1] — coefficient of variation of TCN errors
-          model_entropy    : float [0,1] — combined epistemic uncertainty
-          mc_samples       : int  — number of MC passes used
+        Delegates to _mc_ae_branch + _mc_tcn_branch for implementation reuse.
+        Returns the same dict as predict() plus ae_uncertainty, tcn_uncertainty,
+        model_entropy, mc_samples.
         """
         if self._ae is None:
             raise RuntimeError(f"Model for {self.city} not built/loaded.")
 
-        x2d = x.reshape(1, -1)
+        from app.core.config import MCInferenceConfig
+        unc_min = MCInferenceConfig.UNCERTAINTY_MIN
+        unc_max = MCInferenceConfig.UNCERTAINTY_MAX
 
-        # Collect stochastic AE forward passes
+        ae_result  = self._mc_ae_branch(x, n_samples, unc_min, unc_max)
+        tcn_result = self._mc_tcn_branch(sequence, x, n_samples, unc_min, unc_max)
+
+        model_entropy = float(np.clip(
+            MCInferenceConfig.AE_UNCERTAINTY_WEIGHT * ae_result["ae_uncertainty"]
+            + MCInferenceConfig.TCN_UNCERTAINTY_WEIGHT * tcn_result["tcn_uncertainty"],
+            unc_min, unc_max,
+        ))
+
+        result = self.predict(x, sequence)
+        result["ae_uncertainty"]  = ae_result["ae_uncertainty"]
+        result["tcn_uncertainty"] = tcn_result["tcn_uncertainty"]
+        result["model_entropy"]   = round(model_entropy, 4)
+        result["mc_samples"]      = n_samples
+        return result
+
+    # --------------------------------------------------------
+    #  MC branch methods (parallelism-safe)
+    # --------------------------------------------------------
+
+    def _mc_ae_branch(
+        self,
+        x: np.ndarray,
+        n_samples: int,
+        uncertainty_min: float,
+        uncertainty_max: float,
+    ) -> Dict[str, Any]:
+        """Run n_samples stochastic AE forward passes (training=True activates Dropout).
+
+        Pure function — touches no shared state. Returns dict with ae_* keys.
+        Called exclusively via prepare_mc_tasks() closures.
+        """
+        x2d = x.reshape(1, -1)
         ae_errors: List[float] = []
         for _ in range(n_samples):
             rec = self._ae(x2d, training=True).numpy()
             ae_errors.append(float(np.mean((x2d - rec) ** 2)))
 
-        ae_err_mean = float(np.mean(ae_errors))
-        ae_err_std  = float(np.std(ae_errors))
-        ae_cv       = ae_err_std / max(ae_err_mean, 1e-9)     # coefficient of variation
-        ae_uncertainty = float(np.clip(ae_cv, 0.0, 1.0))
+        ae_mean = float(np.mean(ae_errors))
+        ae_std  = float(np.std(ae_errors))
+        ae_cov  = ae_std / max(ae_mean, MC_COV_EPSILON)
+        ae_uncertainty = float(np.clip(ae_cov, uncertainty_min, uncertainty_max))
 
-        # Collect stochastic TCN forward passes
-        tcn_errors:    List[float] = []
-        tcn_uncertainty = 0.0
-        tcn_err_mean    = 0.0
+        ae_pct = self._ae_ecdf.transform_scalar(ae_mean)
 
-        if self._tcn is not None and sequence is not None:
-            seq3d = sequence.reshape(1, self.seq_len, self.input_dim)
-            for _ in range(n_samples):
-                pred = self._tcn(seq3d, training=True).numpy()
-                tcn_errors.append(float(np.mean((pred - x2d) ** 2)))
+        # Legacy z-score proxy preserved for backward compat (not used in MC merge path)
+        ae_z = (ae_mean - self._ae_error_mu) / max(self._ae_error_std, MC_COV_EPSILON)
+        ae_variance_legacy = float(1.0 / (1.0 + np.exp(-ae_z)))
 
-            tcn_err_mean = float(np.mean(tcn_errors))
-            tcn_err_std  = float(np.std(tcn_errors))
-            tcn_cv       = tcn_err_std / max(tcn_err_mean, 1e-9)
-            tcn_uncertainty = float(np.clip(tcn_cv, 0.0, 1.0))
+        return {
+            "ae_uncertainty":    round(ae_uncertainty, 4),
+            "ae_mean_error":     round(ae_mean, 6),
+            "ae_percentile":     round(float(np.clip(ae_pct, 0.0, 1.0)), 4),
+            "ae_variance":       round(ae_variance_legacy, 4),
+            "ae_error_raw":      round(ae_mean, 6),
+        }
 
-        # Model entropy: high = uncertain = potential anomalous state
-        # Weighted average: AE uncertainty is the primary uncertainty signal
-        model_entropy = float(np.clip(
-            0.60 * ae_uncertainty + 0.40 * tcn_uncertainty, 0.0, 1.0
-        ))
+    def _mc_tcn_branch(
+        self,
+        sequence_snapshot: np.ndarray,
+        x_target: np.ndarray,
+        n_samples: int,
+        uncertainty_min: float,
+        uncertainty_max: float,
+    ) -> Dict[str, Any]:
+        """Run n_samples stochastic TCN forward passes.
 
-        # Re-use deterministic predict for the point-estimate scores
-        result = self.predict(x, sequence)
-        result["ae_uncertainty"]  = round(ae_uncertainty,  4)
-        result["tcn_uncertainty"] = round(tcn_uncertainty, 4)
-        result["model_entropy"]   = round(model_entropy,   4)
-        result["mc_samples"]      = n_samples
+        sequence_snapshot MUST be a caller-provided immutable copy (sequence.copy()).
+        The live _CityBuffer is never passed into this method.
+        """
+        if self._tcn is None or sequence_snapshot is None:
+            return {
+                "tcn_uncertainty": 0.0,
+                "tcn_mean_error":  0.0,
+                "tcn_percentile":  0.0,
+                "tcn_variance":    0.0,
+                "tcn_error_raw":   0.0,
+            }
 
-        return result
+        x2d   = x_target.reshape(1, -1)
+        seq3d = sequence_snapshot.reshape(1, self.seq_len, self.input_dim)
+        tcn_errors: List[float] = []
+        for _ in range(n_samples):
+            pred = self._tcn(seq3d, training=True).numpy()
+            tcn_errors.append(float(np.mean((pred - x2d) ** 2)))
+
+        tcn_mean = float(np.mean(tcn_errors))
+        tcn_std  = float(np.std(tcn_errors))
+        tcn_cov  = tcn_std / max(tcn_mean, MC_COV_EPSILON)
+        tcn_uncertainty = float(np.clip(tcn_cov, uncertainty_min, uncertainty_max))
+
+        tcn_pct = self._tcn_ecdf.transform_scalar(tcn_mean)
+
+        tcn_z = (tcn_mean - self._tcn_error_mu) / max(self._tcn_error_std, MC_COV_EPSILON)
+        tcn_variance_legacy = float(1.0 / (1.0 + np.exp(-tcn_z)))
+
+        return {
+            "tcn_uncertainty": round(tcn_uncertainty, 4),
+            "tcn_mean_error":  round(tcn_mean, 6),
+            "tcn_percentile":  round(float(np.clip(tcn_pct, 0.0, 1.0)), 4),
+            "tcn_variance":    round(tcn_variance_legacy, 4),
+            "tcn_error_raw":   round(tcn_mean, 6),
+        }
+
+    def prepare_mc_tasks(
+        self,
+        x: np.ndarray,
+        sequence: Optional[np.ndarray],
+        n_samples: int,
+        uncertainty_min: float,
+        uncertainty_max: float,
+    ) -> Tuple[Any, Any]:
+        """Return two zero-argument callables ready for asyncio.to_thread dispatch.
+
+        The service layer calls:
+            ae_fn, tcn_fn = model.prepare_mc_tasks(...)
+            ae_result, tcn_result = await asyncio.gather(
+                asyncio.to_thread(ae_fn),
+                asyncio.to_thread(tcn_fn),
+            )
+
+        Invariant: x and sequence are copied here — the live buffer is
+        never captured in the TCN closure.
+        """
+        x_copy   = np.array(x, copy=True)
+        seq_copy = np.array(sequence, copy=True) if sequence is not None else None
+
+        def ae_fn() -> Dict[str, Any]:
+            return self._mc_ae_branch(x_copy, n_samples, uncertainty_min, uncertainty_max)
+
+        def tcn_fn() -> Dict[str, Any]:
+            return self._mc_tcn_branch(seq_copy, x_copy, n_samples, uncertainty_min, uncertainty_max)
+
+        return ae_fn, tcn_fn
 
     # --------------------------------------------------------
     #  Save / Load
@@ -495,7 +590,10 @@ class CityHybridModel:
             ae_path = model_dir / "autoencoder"   # legacy SavedModel dir
             if not ae_path.exists():
                 raise FileNotFoundError(f"No AE model in {model_dir}")
-        ae        = keras.models.load_model(ae_path)
+        # compile=False: inference-only load — skips custom loss deserialisation.
+        # The _weighted_mse loss is only needed for training, not for forward pass.
+        ae        = keras.models.load_model(ae_path, compile=False)
+        ae.compile(optimizer="adam", loss="mse")   # re-compile with standard loss
         input_dim = ae.input_shape[-1]
 
         instance     = cls(city=city, input_dim=input_dim)
@@ -506,7 +604,8 @@ class CityHybridModel:
         if not tcn_path.exists():
             tcn_path = model_dir / "lstm_attention.keras"   # v3.1 legacy name
         if tcn_path.exists():
-            instance._tcn = keras.models.load_model(tcn_path)
+            instance._tcn = keras.models.load_model(tcn_path, compile=False)
+            instance._tcn.compile(optimizer="adam", loss="mse")
 
         # Load ECDF scalers (preferred) or legacy calibration array
         ae_ecdf_path  = model_dir / cls.AE_ECDF_FILE
