@@ -409,8 +409,9 @@ class CityHybridModel:
 
         Monte Carlo Dropout inference for epistemic uncertainty estimation.
         Delegates to _mc_ae_branch + _mc_tcn_branch for implementation reuse.
-        Returns the same dict as predict() plus ae_uncertainty, tcn_uncertainty,
-        model_entropy, mc_samples.
+        Returns a dict with the same keys as predict() plus ae_uncertainty, tcn_uncertainty,
+        model_entropy, mc_samples. Note: ae_percentile/tcn_percentile are computed from
+        MC mean errors (mean of n_samples passes), not from a single deterministic forward pass.
         """
         if self._ae is None:
             raise RuntimeError(f"Model for {self.city} not built/loaded.")
@@ -428,12 +429,20 @@ class CityHybridModel:
             unc_min, unc_max,
         ))
 
-        result = self.predict(x, sequence)
-        result["ae_uncertainty"]  = ae_result["ae_uncertainty"]
-        result["tcn_uncertainty"] = tcn_result["tcn_uncertainty"]
-        result["model_entropy"]   = round(model_entropy, 4)
-        result["mc_samples"]      = n_samples
-        return result
+        return {
+            # Point-estimate scores from MC mean errors (via ECDF)
+            "ae_percentile":  ae_result["ae_percentile"],
+            "tcn_percentile": tcn_result["tcn_percentile"],
+            "ae_variance":    ae_result["ae_variance"],
+            "tcn_variance":   tcn_result["tcn_variance"],
+            "ae_error_raw":   ae_result["ae_error_raw"],
+            "tcn_error_raw":  tcn_result["tcn_error_raw"],
+            # MC epistemic uncertainty fields
+            "ae_uncertainty":  ae_result["ae_uncertainty"],
+            "tcn_uncertainty": tcn_result["tcn_uncertainty"],
+            "model_entropy":   round(model_entropy, 4),
+            "mc_samples":      n_samples,
+        }
 
     # --------------------------------------------------------
     #  MC branch methods (parallelism-safe)
@@ -486,7 +495,7 @@ class CityHybridModel:
     ) -> Dict[str, Any]:
         """Run n_samples stochastic TCN forward passes.
 
-        sequence_snapshot MUST be a caller-provided immutable copy (sequence.copy()).
+        sequence_snapshot MUST be a caller-provided independent copy (sequence.copy()).
         The live _CityBuffer is never passed into this method.
         """
         if self._tcn is None or sequence_snapshot is None:
