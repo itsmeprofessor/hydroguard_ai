@@ -72,6 +72,7 @@ class DriftMonitor:
         self._redis    = redis_client
         self._counters: Dict[str, int]           = defaultdict(int)
         self._recent:   Dict[str, Dict[str, list]] = defaultdict(lambda: defaultdict(list))
+        self._latest_psi: Dict[str, Dict[str, float]] = defaultdict(dict)
 
     # ---- Redis helpers ----
 
@@ -145,6 +146,9 @@ class DriftMonitor:
 
         if not psi_scores:
             return
+
+        # Store latest PSI for health collector (in-memory, no DB dependency)
+        self._latest_psi[city_slug] = dict(psi_scores)
 
         max_psi = max(psi_scores.values())
         if max_psi < PSI_WARN:

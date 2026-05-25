@@ -66,3 +66,27 @@ class TestHealthSchemas:
         assert payload["global_status"] == "ok"
         assert "lahore" in payload["cities"]
         assert payload["cities"]["lahore"]["mc_success_rate"] == 0.95
+
+
+class TestDriftMonitorLatestPsi:
+    def test_latest_psi_starts_empty(self):
+        from backend.app.ml.drift.monitor import DriftMonitor
+        dm = DriftMonitor(redis_client=None)
+        assert dm._latest_psi == {}
+
+    def test_latest_psi_populated_after_check(self):
+        """After _check_drift runs, _latest_psi[slug][feature] is set."""
+        import asyncio
+        from backend.app.ml.drift.monitor import DriftMonitor, MONITORED_FEATURES
+
+        dm = DriftMonitor(redis_client=None)
+        slug = "islamabad"
+        # Seed enough observations for PSI computation
+        for feat in MONITORED_FEATURES[:4]:
+            dm._recent[slug][feat] = [float(i % 10) for i in range(20)]
+
+        asyncio.run(dm._check_drift(slug))
+        # On first check with no Redis reference, PSI defaults to 0.0
+        # but _latest_psi should be populated
+        assert slug in dm._latest_psi
+        assert isinstance(dm._latest_psi[slug], dict)
