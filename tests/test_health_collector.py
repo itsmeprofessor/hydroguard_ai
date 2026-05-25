@@ -143,3 +143,93 @@ class TestCityModelCounters:
         cms._epistemic_buffer["quetta"].extend([0.1, 0.2, 0.3])
         buf = cms.get_epistemic_buffer_snapshot("quetta")
         assert buf == [0.1, 0.2, 0.3]
+
+
+class TestRuntimeHealthCollector:
+    def test_build_snapshot_all_unknown_when_empty(self):
+        """With no observations, all cities report unknown/warming_up."""
+        import backend.app.services.city_model_service as cms
+        cms._timeout_counter.clear()
+        cms._preprocess_fail_counter.clear()
+        cms._epistemic_buffer.clear()
+        cms._mc_success_window.clear()
+
+        from backend.app.services.health_collector import RuntimeHealthCollector
+        collector = RuntimeHealthCollector()
+        collector._tick_inference_health()
+        snap = collector._build_snapshot()
+        assert snap.global_status in ("unknown", "ok")
+        for city_snap in snap.cities.values():
+            assert city_snap.inference_health in ("unknown", "ok")
+
+    def test_inference_health_ok_above_thresholds(self):
+        import backend.app.services.city_model_service as cms
+        cms._mc_success_window.clear()
+        cms._timeout_counter.clear()
+        cms._preprocess_fail_counter.clear()
+
+        for _ in range(15):
+            cms._mc_success_window["islamabad"].append(True)
+            cms._timeout_counter["islamabad"].append(True)
+            cms._preprocess_fail_counter["islamabad"].append(True)
+
+        from backend.app.services.health_collector import RuntimeHealthCollector
+        collector = RuntimeHealthCollector()
+        collector._tick_inference_health()
+        snap = collector._build_snapshot()
+        if "islamabad" in snap.cities:
+            assert snap.cities["islamabad"].inference_health == "ok"
+
+    def test_inference_health_critical_below_threshold(self):
+        import backend.app.services.city_model_service as cms
+        cms._mc_success_window.clear()
+        cms._timeout_counter.clear()
+        cms._preprocess_fail_counter.clear()
+
+        # 5 success, 15 timeout → 25% success rate → critical
+        for _ in range(5):
+            cms._mc_success_window["karachi"].append(True)
+            cms._timeout_counter["karachi"].append(True)
+        for _ in range(15):
+            cms._mc_success_window["karachi"].append(False)
+            cms._timeout_counter["karachi"].append(False)
+        for _ in range(20):
+            cms._preprocess_fail_counter["karachi"].append(True)
+
+        from backend.app.services.health_collector import RuntimeHealthCollector
+        collector = RuntimeHealthCollector()
+        collector._tick_inference_health()
+        snap = collector._build_snapshot()
+        if "karachi" in snap.cities:
+            assert snap.cities["karachi"].inference_health == "critical"
+
+    def test_epistemic_stability_warming_up_below_threshold(self):
+        import backend.app.services.city_model_service as cms
+        cms._epistemic_buffer.clear()
+        cms._epistemic_buffer["lahore"].extend([0.1] * 10)  # fewer than WARMUP_MIN
+
+        from backend.app.core.config import HealthCollectorConfig
+        from backend.app.services.health_collector import RuntimeHealthCollector
+        collector = RuntimeHealthCollector()
+        collector._tick_confidence_health()
+        snap = collector._build_snapshot()
+        if "lahore" in snap.cities:
+            assert snap.cities["lahore"].epistemic_stability == "warming_up"
+            assert snap.cities["lahore"].baseline_ready is False
+
+    def test_epistemic_stability_stable_within_2sigma(self):
+        import backend.app.services.city_model_service as cms
+        from backend.app.core.config import HealthCollectorConfig
+        cms._epistemic_buffer.clear()
+
+        n = HealthCollectorConfig.EPISTEMIC_WARMUP_MIN_SAMPLES + 20
+        vals = [0.15] * n  # constant → zero drift
+        cms._epistemic_buffer["peshawar"].extend(vals)
+
+        from backend.app.services.health_collector import RuntimeHealthCollector
+        collector = RuntimeHealthCollector()
+        collector._tick_confidence_health()
+        snap = collector._build_snapshot()
+        if "peshawar" in snap.cities:
+            assert snap.cities["peshawar"].epistemic_stability == "stable"
+            assert snap.cities["peshawar"].baseline_ready is True
