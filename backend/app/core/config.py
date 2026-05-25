@@ -388,7 +388,7 @@ class HealthCollectorConfig:
     # Background tick cadences (seconds)
     HEALTH_TICK_INTERVAL_S:     int   = int(os.getenv("HEALTH_TICK_INTERVAL_S",    "30"))
     DRIFT_TICK_INTERVAL_S:      int   = int(os.getenv("DRIFT_TICK_INTERVAL_S",     "300"))
-    CONFIDENCE_TICK_INTERVAL_S: int   = int(os.getenv("CONFIDENCE_TICK_INTERVAL_S","3600"))
+    CONFIDENCE_TICK_INTERVAL_S: int   = int(os.getenv("CONFIDENCE_TICK_INTERVAL_S", "3600"))
 
     # Rolling window sizes (number of requests)
     MC_WINDOW_SIZE:             int   = int(os.getenv("HEALTH_MC_WINDOW_SIZE",     "100"))
