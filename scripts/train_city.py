@@ -90,7 +90,7 @@ TRAIN_FRAC = 0.78   # first 78% of remaining → AE/TCN
 
 # ---- Metrics gates ----
 METRICS_GATE_AUC_FUSION = 0.65  # fusion internal AUC (in-distribution, informational)
-METRICS_GATE_AUC_TEST   = 0.58  # unbiased TEST AUC gate (lower — realistic for rare events)
+METRICS_GATE_AUC_TEST   = 0.65  # unbiased TEST AUC gate — minimum for safety-critical deployment
 METRICS_GATE_ECE        = 0.20  # real ECE on TEST
 
 
@@ -170,6 +170,35 @@ def _compute_physics_features(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].fillna(0.0)
 
     return df
+
+
+def _compute_karachi_coastal_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute 9 coastal features for a Karachi partition.
+    Must be called AFTER _compute_physics_features() so that
+    pressure_delta_*, humidity_delta_*, rain_accumulation_* are available.
+    """
+    from app.ml.feature_pipeline import _karachi_coastal_features
+
+    df = df.copy()
+    if "day" not in df.columns and "date" in df.columns:
+        df["day"] = pd.to_datetime(df["date"], errors="coerce").dt.day.fillna(15).astype(int)
+
+    rows = []
+    for _, row in df.iterrows():
+        coastal = _karachi_coastal_features(
+            raw=row.to_dict(),
+            month=int(row.get("month", 6) or 6),
+            day=int(row.get("day", 15) or 15),
+            pressure_delta_3h=float(row.get("pressure_delta_3h", 0.0) or 0.0),
+            pressure_delta_6h=float(row.get("pressure_delta_6h", 0.0) or 0.0),
+            humidity_delta_3h=float(row.get("humidity_delta_3h", 0.0) or 0.0),
+            rain_accumulation_6h=float(row.get("rain_accumulation_6h", 0.0) or 0.0),
+        )
+        rows.append(coastal)
+
+    coastal_df = pd.DataFrame(rows, index=df.index)
+    return pd.concat([df, coastal_df], axis=1)
 
 
 # ─── Historical event anchors (external PMD/NDMA knowledge) ──────────────────
@@ -397,6 +426,16 @@ def train_one_city(
     df_test  = _compute_physics_features(df_test)
     if len(df_holdout):
         df_holdout = _compute_physics_features(df_holdout)
+
+    # ── 5b. Karachi coastal features (after physics; before preprocessor fit) ─
+    if slug == "karachi":
+        df_train   = _compute_karachi_coastal_features(df_train)
+        df_cal     = _compute_karachi_coastal_features(df_cal)
+        df_test    = _compute_karachi_coastal_features(df_test)
+        if len(df_holdout):
+            df_holdout = _compute_karachi_coastal_features(df_holdout)
+        logger.info("[karachi] Coastal features added to all %d splits",
+                    4 if len(df_holdout) else 3)
 
     # ── 6. Preprocessor fitted on TRAIN only ─────────────────────────────────
     prep = WeatherDataPreprocessorV2()
@@ -693,6 +732,13 @@ def train_one_city(
         # Operational (HOLDOUT)
         **holdout_metrics,
         "operational_metrics_path": str(tmp_dir / "operational_metrics.json") if op_metrics_dict else None,
+        "coastal_features":      slug == "karachi",
+        "coastal_feature_names": [
+            "sst_anomaly", "sea_breeze_instability", "cyclone_proximity",
+            "cyclone_season", "humidity_persistence", "coastal_moisture_flux",
+            "urban_drainage_stress", "tidal_proxy", "coastal_pressure_grad",
+        ] if slug == "karachi" else [],
+        "integrity_audit_auc":   None,
         "duration_seconds":  round(elapsed, 1),
     }
 

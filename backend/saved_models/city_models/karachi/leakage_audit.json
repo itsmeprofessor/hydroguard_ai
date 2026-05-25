@@ -1,7 +1,7 @@
 {
   "city_slug": "karachi",
-  "audited_at": "2026-05-08T23:54:12.938143+00:00",
-  "total_score": 5.0,
+  "audited_at": "2026-05-25T10:31:24.759447+00:00",
+  "total_score": 8.0,
   "category": "LOW",
   "abort": false,
   "findings": [
@@ -39,19 +39,28 @@
       "severity": "WARNING",
       "score_delta": 5.0,
       "details": {
-        "mean_max_cosine": 0.9452,
-        "frac_above_threshold": 0.4651
+        "mean_max_cosine": 0.9514,
+        "frac_above_threshold": 0.4961
       },
-      "message": "Moderate similarity: 46.5% of val positives near-duplicate a train positive."
+      "message": "Moderate similarity: 49.6% of val positives near-duplicate a train positive."
     },
     {
       "category": "future_feature_leakage",
-      "severity": "CLEAN",
-      "score_delta": 0.0,
+      "severity": "WARNING",
+      "score_delta": 3.0,
       "details": {
-        "n_features_checked": 35
+        "unrecognised_features": [
+          "sst_anomaly",
+          "sea_breeze_instability",
+          "cyclone_proximity",
+          "cyclone_season",
+          "humidity_persistence",
+          "urban_drainage_stress",
+          "tidal_proxy",
+          "coastal_pressure_grad"
+        ]
       },
-      "message": "All features pass causal pattern check."
+      "message": "8 unrecognised feature(s) \u2014 verify they are causal."
     },
     {
       "category": "duplicate_hashes",
@@ -71,7 +80,7 @@
     "val_pos": 129,
     "train_date_span": "2000-01-01 to 2011-03-25",
     "val_date_span": "2011-03-26 to 2012-10-23",
-    "n_features": 35,
+    "n_features": 44,
     "seq_len": 30
   }
 }
