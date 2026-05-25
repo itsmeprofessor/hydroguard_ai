@@ -331,6 +331,7 @@ async def city_forecast(city: str, request: Request, response: Response):
         "Deprecated /cities/%s/forecast called from %s", slug, request.client
     )
     response.headers["Deprecation"] = 'version="v1"; sunset="2026-08-01"'
+    response.headers["Sunset"] = "Sat, 01 Aug 2026 00:00:00 GMT"
     response.headers["Link"] = (
         f'</api/v2/cities/{slug}/forecast>; rel="successor-version"'
     )

@@ -421,3 +421,9 @@ class TestV1ForecastDeprecation:
         assert "city" in d
         assert "today" in d
         assert len(d["forecast"]) == 7
+
+    def test_v1_forecast_has_link_header(self, client):
+        r = client.get("/cities/islamabad/forecast")
+        assert "Link" in r.headers
+        assert "/api/v2/cities/islamabad/forecast" in r.headers["Link"]
+        assert 'rel="successor-version"' in r.headers["Link"]
