@@ -34,7 +34,7 @@ from uuid import uuid4
 
 import numpy as np
 
-from app.core.config import DATA_DIR, MODELS_DIR, MCInferenceConfig
+from app.core.config import DATA_DIR, MODELS_DIR, MCInferenceConfig, HealthCollectorConfig
 from app.ml.models.city_hybrid import CityHybridModel
 from app.ml.models.tcn import TCN_SEQ_LEN
 SEQUENCE_LENGTH = TCN_SEQ_LEN  # 24 — keep backward-compat name
@@ -51,6 +51,46 @@ _mc_success_window: Dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
 
 # Per-city timestamp of last MC success rate log to prevent log spam
 _mc_last_warn_at: Dict[str, float] = defaultdict(float)
+
+# Per-city ring buffer: True = MC completed within timeout, False = timed out / errored.
+_timeout_counter: Dict[str, deque] = defaultdict(
+    lambda: deque(maxlen=HealthCollectorConfig.MC_WINDOW_SIZE)
+)
+
+# Per-city ring buffer: True = preprocessing succeeded, False = raised exception.
+_preprocess_fail_counter: Dict[str, deque] = defaultdict(
+    lambda: deque(maxlen=HealthCollectorConfig.MC_WINDOW_SIZE)
+)
+
+# Per-city ring buffer of epistemic_uncertainty values from successful MC passes.
+_epistemic_buffer: Dict[str, deque] = defaultdict(
+    lambda: deque(maxlen=HealthCollectorConfig.EPISTEMIC_BUFFER_SIZE)
+)
+
+
+def get_mc_success_rate(slug: str) -> Optional[float]:
+    """Fraction of recent requests that completed MC dropout. None if < 10 obs."""
+    w = _mc_success_window[slug]
+    return (sum(w) / len(w)) if len(w) >= 10 else None
+
+
+def get_timeout_rate(slug: str) -> Optional[float]:
+    """Fraction of recent MC requests that timed out or errored. None if < 10 obs."""
+    w = _timeout_counter[slug]
+    if len(w) < 10:
+        return None
+    return 1.0 - (sum(w) / len(w))
+
+
+def get_preprocess_fail_rate(slug: str) -> Optional[float]:
+    """Fraction of recent predict_v2 calls where preprocessing failed. None if < 10 obs."""
+    w = _preprocess_fail_counter[slug]
+    return (1.0 - sum(w) / len(w)) if len(w) >= 10 else None
+
+
+def get_epistemic_buffer_snapshot(slug: str) -> list:
+    """Return a copy of the epistemic uncertainty buffer for a city."""
+    return list(_epistemic_buffer[slug])
 
 
 def _classify_prediction_stability(epistemic_uncertainty: float) -> str:
@@ -723,8 +763,10 @@ class CityModelService:
         preprocessor = self._preprocessors.get(slug)
         try:
             x_vec = self._preprocess(feat_dict, preprocessor, slug=slug)
+            _preprocess_fail_counter[slug].append(True)
         except Exception as exc:
             logger.error("[%s] Preprocess failed: %s", slug, exc)
+            _preprocess_fail_counter[slug].append(False)
             return self._build_degraded_response(slug, raw_weather, now, "preprocessing_failed")
 
         # ---- Rolling window for TCN ----
@@ -779,6 +821,9 @@ class CityModelService:
                 uncertainty_available   = True
                 mc_samples_used         = MCInferenceConfig.DROPOUT_SAMPLES
                 _mc_success_window[slug].append(True)
+                _timeout_counter[slug].append(True)
+                if epistemic_uncertainty is not None:
+                    _epistemic_buffer[slug].append(epistemic_uncertainty)
 
                 total_elapsed_ms = (time.perf_counter() - _branch_t0) * 1000
                 if total_elapsed_ms > MCInferenceConfig.INFERENCE_TIMEOUT_MS * 0.75:
@@ -795,11 +840,13 @@ class CityModelService:
                 degraded_reason = "timeout"
                 inference_mode  = "fallback_deterministic"
                 _mc_success_window[slug].append(False)
+                _timeout_counter[slug].append(False)
             except Exception as exc:
                 logger.warning("[%s] MC inference exception — falling back: %s", slug, exc)
                 degraded_reason = "exception"
                 inference_mode  = "fallback_deterministic"
                 _mc_success_window[slug].append(False)
+                _timeout_counter[slug].append(False)
         else:
             degraded_reason = "disabled"
 

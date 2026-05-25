@@ -90,3 +90,56 @@ class TestDriftMonitorLatestPsi:
         # but _latest_psi should be populated
         assert slug in dm._latest_psi
         assert isinstance(dm._latest_psi[slug], dict)
+
+
+class TestCityModelCounters:
+    def setup_method(self):
+        """Reset module-level counters before each test."""
+        import backend.app.services.city_model_service as cms
+        cms._timeout_counter.clear()
+        cms._preprocess_fail_counter.clear()
+        cms._epistemic_buffer.clear()
+
+    def test_mc_success_rate_returns_none_below_10(self):
+        import backend.app.services.city_model_service as cms
+        # Empty window → None
+        assert cms.get_mc_success_rate("islamabad") is None
+        # 9 observations → still None
+        for _ in range(9):
+            cms._mc_success_window["islamabad"].append(True)
+        assert cms.get_mc_success_rate("islamabad") is None
+
+    def test_mc_success_rate_correct_fraction(self):
+        import backend.app.services.city_model_service as cms
+        # 8 successes + 2 failures = 0.80
+        for _ in range(8):
+            cms._mc_success_window["karachi"].append(True)
+        for _ in range(2):
+            cms._mc_success_window["karachi"].append(False)
+        rate = cms.get_mc_success_rate("karachi")
+        assert rate is not None
+        assert abs(rate - 0.80) < 0.01
+
+    def test_timeout_rate_correct(self):
+        import backend.app.services.city_model_service as cms
+        for _ in range(9):
+            cms._timeout_counter["lahore"].append(True)
+        cms._timeout_counter["lahore"].append(False)  # 1 timeout in 10
+        rate = cms.get_timeout_rate("lahore")
+        assert rate is not None
+        assert abs(rate - 0.10) < 0.01
+
+    def test_preprocess_fail_rate_correct(self):
+        import backend.app.services.city_model_service as cms
+        for _ in range(19):
+            cms._preprocess_fail_counter["peshawar"].append(True)
+        cms._preprocess_fail_counter["peshawar"].append(False)  # 1 fail in 20
+        rate = cms.get_preprocess_fail_rate("peshawar")
+        assert rate is not None
+        assert abs(rate - 0.05) < 0.01
+
+    def test_epistemic_buffer_snapshot_returns_list(self):
+        import backend.app.services.city_model_service as cms
+        cms._epistemic_buffer["quetta"].extend([0.1, 0.2, 0.3])
+        buf = cms.get_epistemic_buffer_snapshot("quetta")
+        assert buf == [0.1, 0.2, 0.3]
