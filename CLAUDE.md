@@ -86,13 +86,13 @@ No build step. Serve `frontend/web_dashboard/admin_dashboard/` statically (nginx
 
 **App lifespan** (`app/main.py`):
 1. `init_db()` — creates tables; **must import `User` from `app.auth.models`** before `Base.metadata.create_all()`.
-2. Verifies `anomaly_service.get_model_info()` and logs model type/version.
+2. Calls `city_model_service.refresh_registry()` — scans the master CSV + `saved_models/city_models/` to build `CITY_REGISTRY`. Then `warm_up_tcn_buffers()` seeds each city's TCN rolling window (seq_len=30) from the most-recent rows of the master CSV.
 3. Mounts routers in this order: `auth_router` → `api_router` (system/training/prediction/anomalies/risk_analytics) → `analytics_aliases.router` → `realtime_router` (`/ws/*`).
 4. CORS: if `CORS_ORIGINS` contains `*`, no credentials; otherwise specific origins **with** credentials.
 5. Static mount at `/static/*` from `frontend/web_dashboard/admin_dashboard/`; `/frontend` and `/dashboard` GET routes serve `index.html` as a SPA fallback.
 6. Global exception handler returns `{"error": detail, "status_code": code}`.
 
-**Request flow:** Router → `Depends(get_current_user|require_role|require_admin)` → service layer (`anomaly_service`) → Repository (DB) → `broadcast_service.emit_*` → ConnectionManager → all sockets in channel.
+**Request flow:** Router → `Depends(get_current_user|require_role|require_admin)` → service layer (`city_model_service.predict_v2()` for city predictions; `anomaly_service` was decommissioned in v3.2) → Repository (DB) → `broadcast_service.emit_*` → ConnectionManager → all sockets in channel.
 
 #### Endpoints (full inventory)
 
@@ -139,62 +139,54 @@ No build step. Serve `frontend/web_dashboard/admin_dashboard/` statically (nginx
 - **`require_admin`**: accepts EITHER a JWT bearer with `role=="ADMIN"` OR a legacy `X-Admin-Token` header matching `ADMIN_TOKEN`. Keep both — legacy clients still rely on the header.
 - **`require_role(*roles)`**: factory returning a `Depends()` that 403s on mismatch.
 
-#### City-specific hybrid models (v3.1) (`app/ml/models/`, `app/services/city_model_service.py`)
+#### City-specific hybrid models (v3.2+) (`app/ml/models/`, `app/services/city_model_service.py`)
 
-**Goal**: per-city models capture each city's unique seasonal patterns, monsoon profiles, and topographic vulnerabilities. The global `anomaly_service` remains as a fallback for cities without trained models.
+**Goal**: per-city models capture each city's unique seasonal patterns, monsoon profiles, and topographic vulnerabilities. `anomaly_service` was decommissioned in v3.2; the fallback for untrained cities is a rule-based heuristic in `city_model_service._build_degraded_response()`.
 
 **Architecture (one model per city)** in `app/ml/models/city_hybrid.py`:
-- **Autoencoder**: Dense `[64, 32, 16]` → latent **8** → mirrored decoder → `linear` reconstruction. Dropout 0.20.
-- **LSTM + Attention**: `LSTM(64, return_sequences=True)` → **`BahdanauAttention(units=32)`** (additive, causal — `app/ml/models/attention.py`) → `LSTM(32)` → `Dense(16)` → `Dense(1, sigmoid)`. Sequence length = 7.
-- **NO BiLSTM** — strictly causal forward LSTM, suitable for real-time forecasting.
-- **Hybrid score**: `0.55 × ae_score + 0.45 × lstm_score`, both normalised to `[0, 1]`.
-- **Standardised output dict** (always returned): `{ risk_level: "Low"|"Medium"|"High", anomaly_score, confidence, is_anomaly, ae_score, lstm_score, hri_score (0–100) }`.
+- **Autoencoder**: Dense `[64, 32, 16]` → latent **8** → mirrored decoder → `linear`. Dropout 0.20. Physics-weighted MSE loss (prcp 3×, pressure 2.5×, humidity 2×). Trained on fair-weather rows only. Score: `ECDFScaler(ae_error) → ae_percentile ∈ [0, 1]`.
+- **TCN**: `CausalTCN(filters=128, kernel=3, dilations=[1,2,4,8,16,32], seq_len=30)`. Receptive field = 127 observations (~4 months). Trained as next-step reconstructor on full training set. Score: `ECDFScaler(tcn_error) → tcn_percentile ∈ [0, 1]`.
+- **NO LSTM. NO BahdanauAttention. NO BiTCN.** Strictly causal.
+- **Fusion**: `ae_percentile` + `tcn_percentile` + derived features → `FusionModel` (LightGBM) → raw `P(event)` → `IsotonicCalibrator` → `event_probability`.
+- **Uncertainty**: Monte Carlo Dropout — N stochastic forward passes at inference. Outputs `epistemic_uncertainty` (weighted AE + TCN variance blend), `model_entropy`, `prediction_stability` (`stable|warming_up|degraded`).
+- **OOD detection**: `OODDetector` (`ood_detector.pkl`) uses Mahalanobis distance. OOD is **non-blocking** — sets elevated uncertainty but does not stop inference.
+- **Standardised output dict** (v3.2+): `{ inference_id, event_probability, confidence_interval, uncertainty, model_entropy, risk_band, hri_score, is_alert, alert_tier, component_scores: {ae_percentile, tcn_percentile, p_event_raw, ae_variance, tcn_variance}, drivers, sequence_context, inference_mode, epistemic_uncertainty, prediction_stability, degraded_reason }`.
 
 **`CityModelService` singleton** in `app/services/city_model_service.py`:
-- `CITY_REGISTRY` — canonical slug → name / province / population / lat-lon / regional vulnerability for all 10 cities.
-- Lazy-loads each city's saved model on first access; per-city `RLock` makes loading thread-safe.
-- Per-city LSTM rolling buffer (`_CityBuffer`, length 7) — model emits AE-only score until the buffer fills.
-- `predict(city, features, preprocessor)` is the single entry point. Falls back to a **rule-based heuristic** (`prcp/humidity/pressure` weighted score × city vulnerability) when no model exists, returning the same standardised dict with `source="heuristic"`.
-- In-memory **alert log** per city (last 20 anomalies) accessed via `get_recent_alerts()`.
+- `CITY_METADATA` / `CITY_REGISTRY` — canonical slug → name / province / population / lat-lon / vulnerability. Populated by `refresh_registry()` on startup; rescanned on `POST /cities/refresh`.
+- Lazy-loads each city's model set on first access; per-city `RLock` keeps loading thread-safe.
+- Per-city TCN rolling buffer (`_CityBuffer`, length=`TCN_SEQ_LEN`=30) — TCN branch activates only after the buffer fills; before that, AE branch only.
+- `predict_v2(city_slug, raw_weather)` is the primary async entry point. Falls back to `_build_degraded_response()` (rule-based heuristic, `source="heuristic"`) when no model is loaded.
+- In-memory **alert log** per city (last 20 alerts) via `get_recent_alerts()`.
 
 **Saved-model layout**:
 ```
 backend/saved_models/city_models/
 └── <slug>/
-    ├── autoencoder/         # Keras SavedModel
-    ├── lstm_attention/      # Keras SavedModel (optional — skipped if <100 sequences)
-    ├── ae_calibration.npy   # [mean, std, p99] from training reconstruction errors
-    └── preprocessor.joblib  # WeatherDataPreprocessor fitted on this city's data
+    ├── autoencoder.keras        # Keras 3 format (AE branch)
+    ├── tcn_reconstructor.keras  # Keras 3 format (TCN branch)
+    ├── ae_ecdf.pkl              # ECDFScaler fitted on AE reconstruction errors
+    ├── tcn_ecdf.pkl             # ECDFScaler fitted on TCN reconstruction errors
+    ├── lgbm_model.pkl           # LightGBM FusionModel (binary P(event))
+    ├── calibrator.pkl           # IsotonicCalibrator
+    ├── preprocessor_v2.joblib   # WeatherDataPreprocessorV2 fitted on city's data
+    ├── ood_detector.pkl         # OODDetector (Mahalanobis; non-blocking)
+    ├── cal_data.npz             # Held-out calibration arrays (for audit scripts)
+    └── training_metrics.json    # Training provenance + evaluation metrics
 ```
 
-**Training** (`scripts/train_city.py`): args `--city <name>` or `--all`; `--data`, `--epochs`, `--batch-size`, `--no-lstm`, `--seed`, `--min-records`. Per-city training pipeline:
-1. Filter master CSV to one city (`city` column).
-2. Fit `WeatherDataPreprocessor` on that city's data.
-3. Split (no leakage), train AE first, calibrate `[mean, std, p99]` on AE errors.
-4. If ≥100 sequences, train LSTM+Attention on overlapping length-7 windows.
-5. Save → registry hot-swap via `city_model_service.register_model(slug, model)`.
+**Training** (`scripts/train_city.py`): args `--city <name>` or `--all`; `--data`, `--epochs`, `--batch-size`, `--no-tcn`, `--seed`, `--min-records`, `--force`. Per-city training pipeline:
+1. Filter master CSV to one city (`city` column). For Karachi: compute 9 coastal features.
+2. Fit `WeatherDataPreprocessorV2` on the training split (no leakage).
+3. 4-way split (train / cal / test / implicit holdout). Train AE on fair-weather rows; fit `ECDFScaler` on AE errors.
+4. If ≥30 sequences, train TCN reconstructor; fit `ECDFScaler` on TCN errors.
+5. Train `FusionModel` (LightGBM) on cal split branch outputs. Fit `IsotonicCalibrator`.
+6. Train `OODDetector` on training features (Mahalanobis covariance).
+7. Save all artifacts → `city_model_service.register_model(slug, ...)` hot-swap (only if `input_dim` unchanged; dimension change requires container restart).
 
-**Bahdanau Attention layer** (`app/ml/models/attention.py`):
-- Score: `e_t = V · tanh(W·h_t + U·s)`, weights `softmax(e_t)`, context `Σ aₜ · hₜ`.
-- Optional `mask` argument for padding handling.
-- `get_config` / `from_config` implemented — Keras-loadable via `custom_objects={"BahdanauAttention": BahdanauAttention}`.
+#### ML & preprocessing (`app/ml/`, `app/ml/preprocessing_v2.py`)
 
-#### Anomaly detection (`app/services/anomaly_service.py`)
-
-Singleton `anomaly_service` (module-level instance).
-
-- **Architecture**: `WeatherAutoencoder` (Dense [32,16,8] → latent 6) + `LSTMAutoencoder` (32 units, sequence length 7) → `HybridAnomalyDetector` (weighted-average of normalized AE + LSTM scores).
-- **Per-city sequence buffer** (`_CitySequenceBuffer`): rolling deque of length 7 per city. `predict()` pushes the current point; LSTM scoring only fires once the buffer is full. Thread-safe.
-- **Warm-up on startup** (`_warm_hybrid_buffer_after_load`): if `HYBRID_WARMUP_ENABLED`, loads `HYBRID_WARMUP_CSV` (or first CSV in `data/`), transforms via the saved preprocessor, and seeds each city's buffer with the most recent `HYBRID_WARMUP_ROWS_PER_CITY` rows. This is what makes the LSTM produce useful scores from the very first request.
-- **Seasonal threshold multiplier** (`SEASONAL_THRESHOLD_MULTIPLIER`): monsoon months 6–9 get 1.4–1.5×; suppresses false alarms during expected monsoon precipitation.
-- **HRI** (`compute_hri`): `0.40 * anomaly_norm + 0.35 * rainfall_norm + 0.25 * regional_vulnerability` → scaled to int 0–100. Labels: <25 Low, <50 Guarded, <75 Elevated, ≥75 Severe. Vulnerabilities are per-city (Gilgit 0.90 highest, Multan 0.60 lowest) in `ModelConfig.REGIONAL_VULNERABILITY`.
-- **Cloudburst rule engine** (`_assess_cloudburst_risk`): weighted score from `prcp (0.45) + pressure (0.25) + humidity (0.20) + cloud_cover (0.10)`; ×1.2 in monsoon, ×1.1 in flash-flood-prone cities (Islamabad, Rawalpindi, Peshawar, Lahore, Karachi). `is_cloudburst_likely` requires score ≥ 0.5 **AND** heavy precip **AND** (high humidity OR low pressure).
-- **Consensus score** (`compute_consensus_score`): `0.45 × hybrid + 0.35 × cloudburst + 0.20 × (HRI/100)`. Prevents the rule engine from dominating when ML disagrees.
-- **Training** (`train`): split-before-fit (no leakage); preprocessor fitted on train only; trains AE → optionally LSTM (skipped if <100 sequences) → builds `HybridAnomalyDetector` → seeds buffers → saves models + preprocessor + manifest. Previous version archived to `saved_models/archive/v{n}/`.
-
-#### ML & preprocessing (`app/ml/`, `utils/preprocessing.py`)
-
-- **Feature groups** (`ModelConfig`): primary (`prcp`, `humidity`, `pressure`, `cloud_cover` — heavily weighted), secondary (`dew_point`, `wspd`), context (`tmin`, `tmax`, `tavg`, `temp_range` — barely weighted to suppress diurnal noise). Numerical → median imputation → weight × StandardScaler. Temporal → MinMax. Categorical → one-hot, **unseen categories produce all-zero rows** rather than failing.
+- **`WeatherDataPreprocessorV2`** (`app/ml/preprocessing_v2.py`): 28 base numerical features (`NUMERICAL_V2`) + 9 Karachi-specific coastal features (auto-excluded for other cities via `num_present` filter) + 4 temporal + 2 OHE categorical. Fit on training split only; `input_dim` property returns the actual fitted dimension. `utils/preprocessing.py` (v1, `WeatherDataPreprocessor`) is still used by legacy global-model scripts (`scripts/train.py`, `scripts/evaluate.py`) — NOT used by v3.2 inference.
 - **Drift detection** (`app/ml/drift/detector.py`): PSI on `[prcp, humidity, pressure, cloud_cover]`. WARN at 0.10, CRIT at 0.20. Surfaced via `/health`.
 
 #### Repositories (`app/db/repositories/`)
