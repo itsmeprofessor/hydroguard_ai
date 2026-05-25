@@ -377,6 +377,39 @@ class MCInferenceConfig:
 
 
 # ============================================================
+#  Runtime Health Collector
+# ============================================================
+
+class HealthCollectorConfig:
+    """Configuration for the three background health-tick tasks.
+
+    All values are env-var driven — no hardcoded thresholds.
+    """
+    # Background tick cadences (seconds)
+    HEALTH_TICK_INTERVAL_S:     int   = int(os.getenv("HEALTH_TICK_INTERVAL_S",    "30"))
+    DRIFT_TICK_INTERVAL_S:      int   = int(os.getenv("DRIFT_TICK_INTERVAL_S",     "300"))
+    CONFIDENCE_TICK_INTERVAL_S: int   = int(os.getenv("CONFIDENCE_TICK_INTERVAL_S","3600"))
+
+    # Rolling window sizes (number of requests)
+    MC_WINDOW_SIZE:             int   = int(os.getenv("HEALTH_MC_WINDOW_SIZE",     "100"))
+    EPISTEMIC_BUFFER_SIZE:      int   = int(os.getenv("HEALTH_EPISTEMIC_BUFFER",   "200"))
+
+    # MC success rate thresholds — fraction of recent requests that completed MC
+    # (1.0 = all requests used MC dropout; lower = more timeouts/fallbacks)
+    MC_DEGRADED_THRESHOLD:      float = float(os.getenv("HEALTH_MC_DEGRADED",      "0.90"))
+    MC_CRITICAL_THRESHOLD:      float = float(os.getenv("HEALTH_MC_CRITICAL",      "0.70"))
+
+    # Preprocessing failure rate thresholds — fraction of calls where feature
+    # extraction raised an exception
+    PREPROCESS_FAIL_DEGRADED:   float = float(os.getenv("HEALTH_FAIL_DEGRADED",    "0.05"))
+    PREPROCESS_FAIL_CRITICAL:   float = float(os.getenv("HEALTH_FAIL_CRITICAL",    "0.20"))
+
+    # Epistemic warmup: minimum successful MC inferences before 2σ/3σ stability
+    # bands can be computed. City shows "warming_up" until this count is reached.
+    EPISTEMIC_WARMUP_MIN_SAMPLES: int = int(os.getenv("HEALTH_EPISTEMIC_WARMUP",   "50"))
+
+
+# ============================================================
 #  Logging
 # ============================================================
 
