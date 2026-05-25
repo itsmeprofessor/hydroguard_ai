@@ -44,6 +44,6 @@
     "tidal_proxy",
     "coastal_pressure_grad"
   ],
-  "integrity_audit_auc": null,
+  "integrity_audit_auc": 0.8851,
   "duration_seconds": 426.1
 }
