@@ -142,12 +142,18 @@ def run_audit(data_path: Path) -> dict:
     df_train   = _prepare_partition(df_train)
     df_holdout = _prepare_partition(df_holdout)
 
-    prep       = joblib.load(KARACHI_DIR / "preprocessor_v2.joblib")
-    model      = CityHybridModel.load("karachi", KARACHI_DIR)
-    fusion     = FusionModel.load(KARACHI_DIR / "lgbm_model.pkl")
-    calibrator = IsotonicCalibrator.load(KARACHI_DIR / "calibrator.pkl")
+    # ── 3. Load model artifacts ────────────────────────────────────────────────
+    try:
+        prep       = joblib.load(KARACHI_DIR / "preprocessor_v2.joblib")
+        model      = CityHybridModel.load("karachi", KARACHI_DIR)
+        fusion     = FusionModel.load(KARACHI_DIR / "lgbm_model.pkl")
+        calibrator = IsotonicCalibrator.load(KARACHI_DIR / "calibrator.pkl")
+    except FileNotFoundError as exc:
+        logger.error("Model artifact missing — run train_city.py --city Karachi first: %s", exc)
+        sys.exit(2)
 
     X_train,   _ = prep.transform(df_train)
+    # Row order preserved by transform — matches df_train date order for correct TCN seeding.
     X_holdout, _ = prep.transform(df_holdout)
 
     # Add is_monsoon_month and vulnerability AFTER transform (not in preprocessor)
@@ -173,8 +179,9 @@ def run_audit(data_path: Path) -> dict:
     cal_scores = calibrator.transform(raw_scores)
 
     holdout_positives = int(y_holdout.sum())
-    if holdout_positives < 2:
-        logger.warning("Only %d holdout positives — AUC unreliable", holdout_positives)
+    if len(np.unique(y_holdout)) < 2:
+        logger.warning("Holdout has only one class (%d positives / %d total) — AUC set to 0.5",
+                       holdout_positives, len(y_holdout))
         clean_auc   = 0.5
         clean_prauc = 0.0
     else:
@@ -184,11 +191,18 @@ def run_audit(data_path: Path) -> dict:
     X_train_pos   = X_train[y_train == 1]
     X_holdout_pos = X_holdout[y_holdout == 1]
     dup_rate = near_duplicate_rate(X_train_pos, X_holdout_pos, threshold=0.95)
-    logger.info("Near-duplicate rate: %.4f", dup_rate)
+    logger.info(
+        "Near-duplicate rate: %.4f  (train_pos=%d  holdout_pos=%d)",
+        dup_rate, len(X_train_pos), len(X_holdout_pos),
+    )
 
     auc_drop = REPORTED_AUC - clean_auc
     verdict, retrain = classify_pass_fail(REPORTED_AUC, clean_auc)
 
+    logger.info(
+        "Audit complete — clean_auc=%.4f  prauc=%.4f  auc_drop=%.4f  verdict=%s",
+        clean_auc, clean_prauc, auc_drop, verdict,
+    )
     return {
         "reported_auc":        round(REPORTED_AUC, 4),
         "clean_holdout_auc":   round(clean_auc, 4),
@@ -210,6 +224,7 @@ def _write_atomic(path: Path, data: dict) -> None:
         with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=2)
         os.replace(tmp_path, path)
+        logger.info("Audit report written → %s", path)
     except Exception:
         os.unlink(tmp_path)
         raise
