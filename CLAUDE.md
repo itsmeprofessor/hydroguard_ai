@@ -354,7 +354,7 @@ Inline-SVG `Icon` set (50+ icons), animated `BrandMark`, `Sparkline`, button/car
 
 ### `nginx/nginx.conf`
 
-Upstream `hydroguard_api` → `hydroguard-api:8000`. WebSocket upgrade at `/ws/*` (`Upgrade`/`Connection` headers, 86400 s keep-alive). Regex match for API paths (`/anomalies`, `/analytics`, `/risk-map`, `/train`, `/health`, `/auth`, `/model`, `/docs`, `/redoc`, `/openapi.json`, `/cities`, `/weather`, `/drift`, `/database`, `/api`). All other paths → Flutter SPA with `try_files $uri $uri/ /index.html`.
+Upstream `hydroguard_api` → `hydroguard-api:8000`. WebSocket upgrade at `/ws/*` (`Upgrade`/`Connection` headers, `proxy_read_timeout`/`proxy_send_timeout` 86400 s). Regex match for API paths (`/anomalies`, `/analytics`, `/risk-map`, `/train`, `/health`, `/auth`, `/model`, `/docs`, `/redoc`, `/openapi.json`, `/cities`, `/weather`, `/drift`, `/database`, `/api`). All other paths → Flutter SPA with `try_files $uri $uri/ /index.html`.
 
 **Rate limits (per source IP):**
 - `auth/(login|register)`: 5 req/min, burst=3 — brute-force protection
