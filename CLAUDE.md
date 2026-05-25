@@ -93,7 +93,7 @@ No build step. Serve `frontend/web_dashboard/admin_dashboard/` statically (nginx
 6. `city_model_service.model_status()` — logs how many cities have trained models vs. untrained.
 7. `warm_up_tcn_buffers()` — seeds each city's TCN rolling window (seq_len=30) from the most-recent rows of the master CSV; non-fatal.
 8. `RuntimeHealthCollector.start()` — background health tick; non-fatal. Stopped on shutdown.
-9. Mounts routers in this order: `auth_router` → `api_router` (system/training/prediction/anomalies/risk_analytics) → `analytics_aliases.router` → `city_router` → `realtime_router` (`/ws/*`).
+9. Mounts routers in this order: `auth_router` → `api_router` (system/training/prediction/anomalies/risk_analytics) → `analytics_aliases.router` → `realtime_router` (`/ws/*`) → `city_router`. Conditional: `v2_router` (if `app/api/v2/router.py` importable) and `weather_router` (if `app/api/routes/weather.py` importable) are appended after `city_router`.
 10. CORS: if `CORS_ORIGINS` contains `*`, no credentials; otherwise specific origins **with** credentials.
 11. Static mount at `/static/*` from `frontend/web_dashboard/admin_dashboard/`; `/frontend` and `/dashboard` GET routes serve `index.html` as a SPA fallback.
 12. Global exception handler returns `{"error": detail, "status_code": code}`.
@@ -164,7 +164,7 @@ No build step. Serve `frontend/web_dashboard/admin_dashboard/` statically (nginx
     confidence_interval, # [lo, hi]
     uncertainty,         # epistemic uncertainty scalar
     model_entropy,       # None when MC disabled
-    risk_band,           # "Low" | "Moderate" | "High" | "Critical"
+    risk_band,           # "Low" | "Moderate" | "High" | "Severe"
     hri_score,           # 0–100 int
     is_alert,            # bool
     alert_tier,          # 1–5 (severity tier)
