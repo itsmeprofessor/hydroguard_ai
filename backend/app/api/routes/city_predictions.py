@@ -28,7 +28,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import require_admin
@@ -320,9 +320,21 @@ async def city_predict(request: Request, city: str, body: WeatherInput):
 
 
 @router.get("/{city}/forecast", response_model=Dict[str, Any])
-async def city_forecast(city: str):
-    """7-day outlook for *city* (deterministic per-day seed for reproducibility)."""
+async def city_forecast(city: str, request: Request, response: Response):
+    """7-day outlook for *city* (deterministic per-day seed for reproducibility).
+
+    DEPRECATED — use GET /api/v2/cities/{city}/forecast for live WeatherAPI forecasts.
+    Sunset: 2026-08-01.
+    """
     slug = _validate_city(city)
+    logger.warning(
+        "Deprecated /cities/%s/forecast called from %s", slug, request.client
+    )
+    response.headers["Deprecation"] = 'version="v1"; sunset="2026-08-01"'
+    response.headers["Link"] = (
+        f'</api/v2/cities/{slug}/forecast>; rel="successor-version"'
+    )
+
     base = _default_weather(slug)
 
     today    = datetime.now(timezone.utc).date()
@@ -368,6 +380,9 @@ async def city_forecast(city: str):
         "forecast":     days,
         "today":        today.isoformat(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source":       "synthetic",
+        "deprecated":   True,
+        "migrate_to":   f"/api/v2/cities/{slug}/forecast",
     }
 
 

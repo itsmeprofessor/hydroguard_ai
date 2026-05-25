@@ -391,3 +391,33 @@ class TestOODGuard:
         assert "ood_distance"    in resp
         assert "ood_reason"      in resp
         assert resp["event_probability"] is None
+
+
+# ============================================================
+#  V1 Forecast Deprecation
+# ============================================================
+class TestV1ForecastDeprecation:
+    def test_v1_forecast_still_returns_200(self, client):
+        r = client.get("/cities/islamabad/forecast")
+        assert r.status_code == 200
+
+    def test_v1_forecast_has_deprecation_header(self, client):
+        r = client.get("/cities/islamabad/forecast")
+        assert "Deprecation" in r.headers
+        assert "v1" in r.headers["Deprecation"]
+        assert "2026-08-01" in r.headers["Deprecation"]
+
+    def test_v1_forecast_body_source_synthetic(self, client):
+        r = client.get("/cities/islamabad/forecast")
+        d = r.json()
+        assert d.get("source") == "synthetic"
+        assert d.get("deprecated") is True
+        assert "islamabad" in d.get("migrate_to", "")
+
+    def test_v1_forecast_existing_fields_preserved(self, client):
+        r = client.get("/cities/islamabad/forecast")
+        d = r.json()
+        assert "forecast" in d
+        assert "city" in d
+        assert "today" in d
+        assert len(d["forecast"]) == 7
