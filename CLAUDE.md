@@ -85,12 +85,18 @@ No build step. Serve `frontend/web_dashboard/admin_dashboard/` statically (nginx
 **Entry point:** `backend/run_server.py` (CLI: `--host`, `--port/-p`, `--reload/-r`, `--workers/-w`) → uvicorn → `app/main.py::create_app()`.
 
 **App lifespan** (`app/main.py`):
-1. `init_db()` — creates tables; **must import `User` from `app.auth.models`** before `Base.metadata.create_all()`.
-2. Calls `city_model_service.refresh_registry()` — scans the master CSV + `saved_models/city_models/` to build `CITY_REGISTRY`. Then `warm_up_tcn_buffers()` seeds each city's TCN rolling window (seq_len=30) from the most-recent rows of the master CSV.
-3. Mounts routers in this order: `auth_router` → `api_router` (system/training/prediction/anomalies/risk_analytics) → `analytics_aliases.router` → `realtime_router` (`/ws/*`).
-4. CORS: if `CORS_ORIGINS` contains `*`, no credentials; otherwise specific origins **with** credentials.
-5. Static mount at `/static/*` from `frontend/web_dashboard/admin_dashboard/`; `/frontend` and `/dashboard` GET routes serve `index.html` as a SPA fallback.
-6. Global exception handler returns `{"error": detail, "status_code": code}`.
+1. `validate_startup_secrets()` — exits in production if `JWT_SECRET_KEY` is missing/placeholder.
+2. `init_db()` — creates tables; **must import `User` from `app.auth.models`** before `Base.metadata.create_all()`.
+3. `init_redis()` — Redis connection pool; non-fatal if Redis is unavailable.
+4. `init_weather_provider()` — WeatherAPI HTTP client; non-fatal.
+5. `RollingWindowBuffer`, `EventBus`, `DriftMonitor`, `CalibrationService` — supporting services initialised in sequence; each non-fatal.
+6. `city_model_service.model_status()` — logs how many cities have trained models vs. untrained.
+7. `warm_up_tcn_buffers()` — seeds each city's TCN rolling window (seq_len=30) from the most-recent rows of the master CSV; non-fatal.
+8. `RuntimeHealthCollector.start()` — background health tick; non-fatal. Stopped on shutdown.
+9. Mounts routers in this order: `auth_router` → `api_router` (system/training/prediction/anomalies/risk_analytics) → `analytics_aliases.router` → `city_router` → `realtime_router` (`/ws/*`).
+10. CORS: if `CORS_ORIGINS` contains `*`, no credentials; otherwise specific origins **with** credentials.
+11. Static mount at `/static/*` from `frontend/web_dashboard/admin_dashboard/`; `/frontend` and `/dashboard` GET routes serve `index.html` as a SPA fallback.
+12. Global exception handler returns `{"error": detail, "status_code": code}`.
 
 **Request flow:** Router → `Depends(get_current_user|require_role|require_admin)` → service layer (`city_model_service.predict_v2()` for city predictions; `anomaly_service` was decommissioned in v3.2) → Repository (DB) → `broadcast_service.emit_*` → ConnectionManager → all sockets in channel.
 
@@ -150,7 +156,30 @@ No build step. Serve `frontend/web_dashboard/admin_dashboard/` statically (nginx
 - **Fusion**: `ae_percentile` + `tcn_percentile` + derived features → `FusionModel` (LightGBM) → raw `P(event)` → `IsotonicCalibrator` → `event_probability`.
 - **Uncertainty**: Monte Carlo Dropout — N stochastic forward passes at inference. Outputs `epistemic_uncertainty` (weighted AE + TCN variance blend), `model_entropy`, `prediction_stability` (`stable|warming_up|degraded`).
 - **OOD detection**: `OODDetector` (`ood_detector.pkl`) uses Mahalanobis distance. OOD is **non-blocking** — sets elevated uncertainty but does not stop inference.
-- **Standardised output dict** (v3.2+): `{ inference_id, event_probability, confidence_interval, uncertainty, model_entropy, risk_band, hri_score, is_alert, alert_tier, component_scores: {ae_percentile, tcn_percentile, p_event_raw, ae_variance, tcn_variance}, drivers, sequence_context, inference_mode, epistemic_uncertainty, prediction_stability, degraded_reason }`.
+- **Standardised output dict** (v3.2+):
+  ```
+  {
+    inference_id, city, city_slug, inferred_at, model_version, source,
+    event_probability,   # IsotonicCalibrator output ∈ [0,1]
+    confidence_interval, # [lo, hi]
+    uncertainty,         # epistemic uncertainty scalar
+    model_entropy,       # None when MC disabled
+    risk_band,           # "Low" | "Moderate" | "High" | "Critical"
+    hri_score,           # 0–100 int
+    is_alert,            # bool
+    alert_tier,          # 1–5 (severity tier)
+    alert_threshold,     # configured threshold used for this inference
+    component_scores:    { ae_percentile, tcn_percentile, p_event_raw, ae_variance, tcn_variance },
+    drivers,             # SHAP-derived top contributors
+    weather_inputs,      # raw inputs echoed back
+    climatology_context, # prcp_climo_pct, pressure_climo_z, etc.
+    coastal_features,    # Karachi only; null for other cities
+    sequence_context:    { buffer_size, required_size, tcn_active },
+    inference_mode,      # "mc_dropout" | "fallback_deterministic"
+    epistemic_uncertainty, model_uncertainty_score, prediction_stability,
+    mc_samples_requested, mc_samples_completed, degraded_reason
+  }
+  ```
 
 **`CityModelService` singleton** in `app/services/city_model_service.py`:
 - `CITY_METADATA` / `CITY_REGISTRY` — canonical slug → name / province / population / lat-lon / vulnerability. Populated by `refresh_registry()` on startup; rescanned on `POST /cities/refresh`.
@@ -171,7 +200,11 @@ backend/saved_models/city_models/
     ├── calibrator.pkl           # IsotonicCalibrator
     ├── preprocessor_v2.joblib   # WeatherDataPreprocessorV2 fitted on city's data
     ├── ood_detector.pkl         # OODDetector (Mahalanobis; non-blocking)
+    ├── ae_calibration.npy       # Legacy v3.1 compat — AE [mean, std, p99] from training errors
     ├── cal_data.npz             # Held-out calibration arrays (for audit scripts)
+    ├── calibration_audit.json   # Per-city calibration audit results (ECE, reliability)
+    ├── leakage_audit.json       # Feature leakage audit results from training pipeline
+    ├── operational_metrics.json # Runtime operational metrics snapshot
     └── training_metrics.json    # Training provenance + evaluation metrics
 ```
 
