@@ -131,10 +131,31 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("DriftMonitor status check failed: %s", exc)
 
+    # 7. Warm up TCN rolling buffers so first predictions are not cold-start zeros
+    try:
+        await city_model_service.warm_up_tcn_buffers()
+    except Exception as exc:
+        logger.warning("TCN warm-up failed (non-fatal): %s", exc)
+
+    # 8. Start runtime health collector (non-blocking background ticks)
+    _health_collector = None
+    try:
+        from app.services.health_collector import get_health_collector
+        _health_collector = get_health_collector()
+        _health_collector.start()
+        logger.info("RuntimeHealthCollector started")
+    except Exception as exc:
+        logger.warning("RuntimeHealthCollector start failed (non-fatal): %s", exc)
+
     logger.info("=== HydroGuard-AI ready ===")
     yield
 
     # Shutdown
+    if _health_collector is not None:
+        try:
+            await _health_collector.stop()
+        except Exception as exc:
+            logger.warning("RuntimeHealthCollector stop error: %s", exc)
     try:
         await close_redis()
     except Exception as exc:
