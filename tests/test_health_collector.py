@@ -96,6 +96,7 @@ class TestCityModelCounters:
     def setup_method(self):
         """Reset module-level counters before each test."""
         import backend.app.services.city_model_service as cms
+        cms._mc_success_window.clear()
         cms._timeout_counter.clear()
         cms._preprocess_fail_counter.clear()
         cms._epistemic_buffer.clear()
@@ -158,7 +159,7 @@ class TestRuntimeHealthCollector:
         collector = RuntimeHealthCollector()
         collector._tick_inference_health()
         snap = collector._build_snapshot()
-        assert snap.global_status in ("unknown", "ok")
+        assert snap.global_status == "unknown"
         for city_snap in snap.cities.values():
             assert city_snap.inference_health in ("unknown", "ok")
 

@@ -274,11 +274,12 @@ class RuntimeHealthCollector:
             )
 
         statuses = [c.inference_health for c in cities.values()]
+        non_unknown = [s for s in statuses if s != "unknown"]
         if "critical" in statuses:
             global_status = "critical"
         elif "degraded" in statuses:
             global_status = "degraded"
-        elif all(s == "ok" for s in statuses if s != "unknown"):
+        elif non_unknown and all(s == "ok" for s in non_unknown):
             global_status = "ok"
         else:
             global_status = "unknown"
