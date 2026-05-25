@@ -1,0 +1,12 @@
+{
+  "reported_auc": 0.9303,
+  "clean_holdout_auc": 0.9432,
+  "clean_holdout_prauc": 0.6392,
+  "auc_drop": -0.0129,
+  "near_duplicate_rate": 0.2921,
+  "holdout_n": 876,
+  "holdout_positives": 89,
+  "pass_fail": "PASS",
+  "retrain_recommended": false,
+  "audited_at": "2026-05-25T08:43:30.231729+00:00"
+}
