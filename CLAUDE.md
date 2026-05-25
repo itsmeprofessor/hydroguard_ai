@@ -350,11 +350,20 @@ Inline-SVG `Icon` set (50+ icons), animated `BrandMark`, `Sparkline`, button/car
 - **`postgres:16-alpine`** (`hydroguard-db`) — db `hydroguard`, user `hydroguard`, vol `postgres_data`, healthcheck `pg_isready`.
 - **`redis:7-alpine`** (`hydroguard-redis`) — password from env, vol `redis_data`, healthcheck `redis-cli ping`.
 - **`hydroguard-api`** — built from root `Dockerfile` (multi-stage `python:3.11-slim`); env: `DATABASE_URL=postgresql://...`, `REDIS_URL`, JWT vars, `HYBRID_WARMUP=true`. Mounts `./backend/data`, `./backend/saved_models`, `./backend/logs`. Healthcheck `curl -sf /health`. Depends on db + redis.
-- **`nginx:alpine`** — mounts `./nginx/nginx.conf` (ro), `./nginx/certs` (ro), and `./frontend/web_dashboard/admin_dashboard` → `/usr/share/nginx/html`. Ports `80:80`, `443:443`.
+- **`nginx:alpine`** — mounts `./nginx/nginx.conf` (ro), `./nginx/certs` (ro), and `./frontend/citizen_flutter_app/build/web` → `/usr/share/nginx/html` (compiled Flutter web app). Ports `80:80`, `443:443`.
 
 ### `nginx/nginx.conf`
 
-Upstream `hydroguard_api` → `hydroguard-api:8000`. WebSocket upgrade at `/ws/*` (`Upgrade`/`Connection` headers, 86400 s timeouts). Regex match for API paths (`/predict`, `/anomalies`, `/analytics`, `/risk-map`, `/train`, `/health`, `/auth`, `/model`, `/docs`, `/redoc`, `/openapi.json`). All other paths → static SPA with `try_files $uri $uri/ /index.html`. HTTPS server block present but cert paths commented.
+Upstream `hydroguard_api` → `hydroguard-api:8000`. WebSocket upgrade at `/ws/*` (`Upgrade`/`Connection` headers, 86400 s keep-alive). Regex match for API paths (`/anomalies`, `/analytics`, `/risk-map`, `/train`, `/health`, `/auth`, `/model`, `/docs`, `/redoc`, `/openapi.json`, `/cities`, `/weather`, `/drift`, `/database`, `/api`). All other paths → Flutter SPA with `try_files $uri $uri/ /index.html`.
+
+**Rate limits (per source IP):**
+- `auth/(login|register)`: 5 req/min, burst=3 — brute-force protection
+- `api/v2/cities/*/predict` + `/predict`: 60 req/min, burst=10
+- All other API routes: 200 req/min, burst=50
+
+**Frontend served:** `citizen_flutter_app/build/web` (compiled Flutter). The React `citizen_app` is served by FastAPI at `/citizen`, not by nginx.
+
+**HTTPS:** Self-signed certs for local dev — `openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout nginx/certs/privkey.pem -out nginx/certs/fullchain.pem -subj "/CN=localhost"`. Production: use Certbot. Certs mounted `:ro`; to renew, update host files and `docker compose restart nginx`.
 
 ### `Dockerfile` (root)
 
@@ -386,9 +395,9 @@ Classes: `TestSystem` (root, health, model info, database statistics), `TestAnom
 
 ## Key Constraints & Gotchas
 
-- **ML architecture is fixed**: Autoencoder + LSTM + **Bahdanau Attention** per-city hybrid. **No BiLSTM**: the system must remain causal so the LSTM can be used for real-time forecasting. The global `anomaly_service` (legacy AE+LSTM hybrid, no attention) is kept only as a fallback.
-- **City-specific models are required**: each of the 10 cities trains its own AE+LSTM+Attention model. `CityModelService` lazy-loads them; missing models route through a heuristic. Don't replace the per-city design with a single global model.
-- **Standardised output dict**: every prediction returns `{ risk_level, anomaly_score, confidence, is_anomaly, ae_score, lstm_score, hri_score }`. Risk levels are `Low | Medium | High` (no `Critical` — that maps to `High` in v3.1). The backend translates this to scenario `safe | warn | crit` via `_risk_to_scenario` in `app/api/routes/city_predictions.py`.
+- **ML architecture is fixed**: Autoencoder + **TCN** + **LightGBM FusionModel** + **IsotonicCalibrator** per-city. No BiTCN, no LSTM, no BahdanauAttention — strictly causal. MC Dropout provides epistemic uncertainty. `anomaly_service` is decommissioned; the fallback for untrained cities is the rule-based heuristic in `city_model_service`.
+- **City-specific models are required**: each city trains its own AE+TCN+FusionModel set (`scripts/train_city.py`). `CityModelService` lazy-loads them; missing models route through the rule-based heuristic. Don't replace the per-city design with a single global model.
+- **Standardised output dict**: v2 predictions return `{ inference_id, event_probability, confidence_interval, uncertainty, risk_band, hri_score, is_alert, alert_tier, component_scores, drivers, sequence_context, inference_mode, epistemic_uncertainty, prediction_stability, degraded_reason }`. The v1 `/cities/{city}/forecast` translates `risk_band` to scenario `safe | warn | crit` via `_risk_to_scenario`.
 - **Citizen web app must follow the zip design**: do not redesign hero cards, color tokens, or layout primitives without referencing `frontend design for fyp/NewWebAPP.zip`. The zip is the visual contract.
 - **Mobile dependencies removed in v3.1**: the Flutter project (`frontend/weather_anomaly_app/`) is deprecated — do not extend it. All new client work goes into the web apps.
 - **JWT secret must be set** in production; the placeholder logs a warning but the app still runs (tokens are guessable).
@@ -404,4 +413,4 @@ Classes: `TestSystem` (root, health, model info, database statistics), `TestAnom
 - **WebSocket fan-out is per-worker**: today's deployment is single-worker. If you scale uvicorn, you'll need a Redis pub/sub bridge between `ConnectionManager` instances.
 - **City model loading is thread-safe via per-slug RLock** — concurrent first-touch predictions race on the same lock and only one filesystem load happens per city.
 - **CORS with `*`**: when `CORS_ORIGINS` contains `*`, FastAPI cannot allow credentials. The dashboard's auth flow requires specific origins (with credentials) in production.
-- **Bahdanau Attention is custom** — when loading saved LSTM models, always pass `custom_objects={"BahdanauAttention": BahdanauAttention}` to `keras.models.load_model`. `CityHybridModel.load()` already does this.
+- **TCN is custom** — `app/ml/models/tcn.py` implements `CausalTCN`. When loading TCN models, `CityHybridModel.load()` handles all custom object registration automatically.
