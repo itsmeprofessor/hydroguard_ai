@@ -134,7 +134,10 @@ class WeatherDataPreprocessorV2:
         self._temp_scaler    = MinMaxScaler()
         self._ohe_categories: Dict[str, List[str]] = {}
         self._feature_names:  List[str] = []
-        self._fitted_num_count: int = 0
+        self._fitted_num_count:  int = 0
+        self._fitted_temp_count: int = 0
+        self._fitted_ohe_count:  int = 0
+        self._fitted_pass_count: int = 0
         self._is_fitted = False
 
     # ── Fit ─────────────────────────────────────────────────────
@@ -153,6 +156,7 @@ class WeatherDataPreprocessorV2:
 
         # Temporal: MinMaxScale
         temp_present = [f for f in self.TEMPORAL_V2 if f in df.columns]
+        self._fitted_temp_count = len(temp_present)
         if temp_present:
             self._temp_scaler.fit(df[temp_present].fillna(0).values.astype(float))
 
@@ -161,6 +165,11 @@ class WeatherDataPreprocessorV2:
             if col in df.columns:
                 cats = sorted(df[col].fillna("UNKNOWN").astype(str).unique().tolist())
                 self._ohe_categories[col] = cats
+        self._fitted_ohe_count = sum(len(cats) for cats in self._ohe_categories.values())
+
+        # Passthrough: track how many columns were actually present in training data
+        pass_present = [f for f in self.PASSTHROUGH_V2 if f in df.columns]
+        self._fitted_pass_count = len(pass_present)
 
         self._is_fitted = True
         logger.info(
@@ -269,13 +278,27 @@ class WeatherDataPreprocessorV2:
 
     @property
     def input_dim(self) -> int:
-        """Total output feature dimension (after all encoding)."""
+        """Total output feature dimension (after all encoding).
+
+        Uses counts tracked during fit() so the value is accurate regardless
+        of how many columns were actually present in the training DataFrame.
+        Temporal and passthrough counts reflect columns seen at fit time;
+        OHE count reflects the actual number of one-hot columns produced.
+
+        Falls back to legacy hardcoded lengths for preprocessors loaded from
+        joblib files that predate the _fitted_temp_count / _fitted_pass_count
+        attributes (backward-compatible with models saved before this fix).
+        """
         if not self._is_fitted:
             return 0
-        ohe_total = sum(len(cats) for cats in self._ohe_categories.values())
+        ohe_total = getattr(self, "_fitted_ohe_count", None)
+        if ohe_total is None:
+            ohe_total = sum(len(cats) for cats in self._ohe_categories.values())
+        temp_count = getattr(self, "_fitted_temp_count", len(self.TEMPORAL_V2))
+        pass_count = getattr(self, "_fitted_pass_count", len(self.PASSTHROUGH_V2))
         return (
             self._fitted_num_count
-            + len(self.TEMPORAL_V2)
+            + temp_count
             + ohe_total
-            + len(self.PASSTHROUGH_V2)
+            + pass_count
         )

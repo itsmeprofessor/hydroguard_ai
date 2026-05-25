@@ -1198,6 +1198,26 @@ class CityModelService:
                     for k, v in features.items():
                         if v is not None and k in base:
                             base[k] = v
+                    # Inject Karachi coastal features before transform so the
+                    # preprocessor sees all 36 numerical columns it was fitted on.
+                    # Without this, transform raises ValueError: X has 27 features,
+                    # but SimpleImputer is expecting 36.
+                    if resolved_slug == "karachi":
+                        try:
+                            from app.ml.feature_pipeline import _karachi_coastal_features as _kcf
+                            now_dt = datetime.now(timezone.utc)
+                            coastal = _kcf(
+                                raw=base,
+                                month=int(base.get("month") or now_dt.month),
+                                day=int(base.get("day") or now_dt.day),
+                                pressure_delta_3h=float(base.get("pressure_delta_3h") or 0.0),
+                                pressure_delta_6h=float(base.get("pressure_delta_6h") or 0.0),
+                                humidity_delta_3h=float(base.get("humidity_delta_3h") or 0.0),
+                                rain_accumulation_6h=float(base.get("rain_accumulation_6h") or 0.0),
+                            )
+                            base.update(coastal)
+                        except Exception as _kcf_exc:
+                            logger.debug("[karachi] Coastal feature injection failed: %s", _kcf_exc)
                     row = pd.DataFrame([base])
                     out = preprocessor.transform(row)
                     x = out[0] if isinstance(out, tuple) else out

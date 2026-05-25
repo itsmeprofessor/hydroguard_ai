@@ -76,10 +76,12 @@ def _prepare_partition(df: pd.DataFrame) -> pd.DataFrame:
     """
     from train_city import (
         _ensure_month, _ensure_derived, _compute_physics_features,
+        _compute_karachi_coastal_features,
     )
     df = _ensure_month(df)
     df = _ensure_derived(df)
     df = _compute_physics_features(df)
+    df = _compute_karachi_coastal_features(df)  # inject 9 coastal features (44-dim model)
     if "day" not in df.columns and "date" in df.columns:
         df["day"] = pd.to_datetime(df["date"], errors="coerce").dt.day.fillna(15).astype(int)
     return df
