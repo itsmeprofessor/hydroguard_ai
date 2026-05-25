@@ -91,9 +91,9 @@ class TestAnomalies:
 
 class TestPrediction:
     def test_predict_missing_city(self, client):
-        """city is a required field — expect 422."""
-        r = client.post("/predict", json={"tmin": 25.0})
-        assert r.status_code == 422
+        """v1 /predict is tombstoned — returns 308 regardless of body content."""
+        r = client.post("/predict", json={"tmin": 25.0}, follow_redirects=False)
+        assert r.status_code == 308
 
     def test_predict_invalid_humidity(self, client):
         """humidity > 100 violates field constraint — expect 422."""
@@ -299,10 +299,11 @@ class TestV2Cities:
         assert "cities" in data
 
     def test_predict_v2_missing_required(self, client, auth_headers):
-        # city only, missing prcp/humidity/pressure -> 422
+        # All weather fields are optional (filled from defaults) — empty body is valid.
+        # Field-range validation still applies: humidity out of [0,100] must return 422.
         resp = client.post(
             "/api/v2/cities/islamabad/predict",
-            json={"city": "Islamabad"},
+            json={"humidity": 999},
             headers=auth_headers,
         )
         assert resp.status_code == 422
