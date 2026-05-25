@@ -96,6 +96,19 @@ class WeatherDataPreprocessorV2:
         "prcp_climo_pct",     # prcp / climatological median (>1.0 = above normal)
         "humidity_climo_pct", # humidity / climatological median
         # NOTE: pressure_climo_z removed (was never populated from training CSV)
+
+        # ── Karachi coastal features (9) ─────────────────────
+        # num_present filter in fit/transform excludes these for non-Karachi
+        # cities because the columns are simply not present in their DataFrames.
+        "sst_anomaly",             # Sea surface temp anomaly proxy (°C above seasonal baseline)
+        "sea_breeze_instability",  # Land-sea thermal gradient x humidity
+        "cyclone_proximity",       # Arabian Sea cyclone proximity proxy (0-1)
+        "cyclone_season",          # Binary: 1 if Arabian Sea cyclone season (May-Nov)
+        "humidity_persistence",    # Stable marine air mass persistence (0-1)
+        "coastal_moisture_flux",   # Onshore moisture transport proxy (0-1)
+        "urban_drainage_stress",   # Urban drainage capacity stress proxy (0-1)
+        "tidal_proxy",             # Semi-diurnal tidal influence proxy (-1 to 1)
+        "coastal_pressure_grad",   # Organised convective system approach proxy (0-1)
     ]
 
     # Features that get 0.0 when history is unavailable (cold start / first rows)
