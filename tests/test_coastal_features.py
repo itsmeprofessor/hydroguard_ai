@@ -108,7 +108,7 @@ class TestCoastalFeatureExtension:
         X, feat_names = prep.transform(df)
         assert X.shape[1] >= 44, f"Expected >=44 dims, got {X.shape[1]}"
 
-    def test_preprocessor_still_accepts_35_dim(self):
+    def test_coastal_features_absent_in_nonkarachi_output(self):
         """Non-Karachi cities: no coastal features leak into output."""
         from app.ml.preprocessing_v2 import WeatherDataPreprocessorV2
         df = _make_islamabad_df(100)
@@ -118,3 +118,25 @@ class TestCoastalFeatureExtension:
         coastal_in_feats = [f for f in feat_names if f in COASTAL_NAMES]
         assert len(coastal_in_feats) == 0, \
             f"Coastal features leaked into non-Karachi output: {coastal_in_feats}"
+
+    def test_input_dim_matches_output_shape(self):
+        """input_dim must equal X.shape[1] for both Karachi and non-Karachi."""
+        from app.ml.preprocessing_v2 import WeatherDataPreprocessorV2
+
+        # Karachi
+        df_k = _make_karachi_df(100)
+        prep_k = WeatherDataPreprocessorV2()
+        prep_k.fit(df_k)
+        X_k, _ = prep_k.transform(df_k)
+        assert prep_k.input_dim == X_k.shape[1], (
+            f"Karachi: input_dim={prep_k.input_dim} != X.shape[1]={X_k.shape[1]}"
+        )
+
+        # Islamabad (no coastal columns)
+        df_i = _make_islamabad_df(100)
+        prep_i = WeatherDataPreprocessorV2()
+        prep_i.fit(df_i)
+        X_i, _ = prep_i.transform(df_i)
+        assert prep_i.input_dim == X_i.shape[1], (
+            f"Islamabad: input_dim={prep_i.input_dim} != X_i.shape[1]={X_i.shape[1]}"
+        )

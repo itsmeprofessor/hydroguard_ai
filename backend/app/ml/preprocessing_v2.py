@@ -5,7 +5,7 @@ Upgrades WeatherDataPreprocessorV2 with real temporal dynamics and
 physics-informed interaction features.
 
 Breaking changes from v3.2:
-  - NUMERICAL_V2 expanded from 22 → 28 features
+  - NUMERICAL_V2 expanded from 22 → 28 features + 9 coastal (Karachi-only, auto-excluded by num_present filter) = 37 total in registry
     * Removed: pressure_climo_z (never populated from CSV)
     * Added: pressure_accel, humidity_accel, pressure_volatility_6d,
              humidity_volatility_6d, prcp_trend_6d, atm_instability
@@ -41,7 +41,8 @@ class WeatherDataPreprocessorV2:
     Physics-aware preprocessor for the v3.3 enriched feature set.
 
     Feature groups (in output order):
-      NUMERICAL_V2   -- 28 features (raw + static derived + temporal dynamics
+      NUMERICAL_V2   -- 28 features (37 in registry; 9 Karachi-only coastal auto-excluded for other cities)
+                        (raw + static derived + temporal dynamics
                         + physics interaction); StandardScale after imputation.
                         Rolling-delta features → 0.0 when history unavailable.
       TEMPORAL_V2    -- 5 features; MinMaxScale
@@ -133,6 +134,7 @@ class WeatherDataPreprocessorV2:
         self._temp_scaler    = MinMaxScaler()
         self._ohe_categories: Dict[str, List[str]] = {}
         self._feature_names:  List[str] = []
+        self._fitted_num_count: int = 0
         self._is_fitted = False
 
     # ── Fit ─────────────────────────────────────────────────────
@@ -143,6 +145,7 @@ class WeatherDataPreprocessorV2:
 
         # Numerical: impute → StandardScale
         num_present = [f for f in self.NUMERICAL_V2 if f in df.columns]
+        self._fitted_num_count = len(num_present)
         if num_present:
             arr = df[num_present].values.astype(float)
             self._num_imputer.fit(arr)
@@ -271,7 +274,7 @@ class WeatherDataPreprocessorV2:
             return 0
         ohe_total = sum(len(cats) for cats in self._ohe_categories.values())
         return (
-            len(self.NUMERICAL_V2)
+            self._fitted_num_count
             + len(self.TEMPORAL_V2)
             + ohe_total
             + len(self.PASSTHROUGH_V2)
