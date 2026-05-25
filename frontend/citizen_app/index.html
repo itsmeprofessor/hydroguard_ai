@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>HydroGuard — Flood & Weather Alerts</title>
+  <meta name="description" content="Real-time flood and cloudburst risk for 10 cities across Pakistan."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="citizen-styles.css"/>
+</head>
+<body>
+  <div id="root">
+    <!-- Boot screen -->
+    <div class="boot-screen">
+      <div class="boot-logo">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+          <rect width="40" height="40" rx="12" fill="url(#bootGrad)"/>
+          <path d="M20 8 C20 8 28 18 28 24 C28 28.4 24.4 32 20 32 C15.6 32 12 28.4 12 24 C12 18 20 8 20 8Z" fill="white" opacity="0.95"/>
+          <defs>
+            <linearGradient id="bootGrad" x1="0" y1="0" x2="40" y2="40">
+              <stop offset="0%" stop-color="#2563EB"/>
+              <stop offset="100%" stop-color="#0891B2"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div class="boot-name">HydroGuard</div>
+      <div class="boot-spinner"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"
+    integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L"
+    crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"
+    integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm"
+    crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"
+    crossorigin="anonymous"></script>
+
+  <!-- Load order matters: api → icons → screens → settings → app -->
+  <script src="api.js"></script>
+  <script type="text/babel" src="citizen-icons.jsx"></script>
+  <script type="text/babel" src="citizen-screens.jsx"></script>
+  <script type="text/babel" src="citizen-settings.jsx"></script>
+  <script type="text/babel" src="citizen-app.jsx"></script>
+</body>
+</html>
