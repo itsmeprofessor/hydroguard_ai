@@ -327,3 +327,10 @@ All city weather fetches run in parallel. Falls back to zero-fill on any per-cit
 - `broadcast_service.py` is a compatibility layer, not a permanent event path
 - Internal feature names never change — display mapping is presentation-only
 - Alembic governs production schema; `create_all()` is dev safety net only
+- **`predict_v2(slug, raw)` is treated as deterministic for identical inputs** — this is a hard system invariant required for correctness under polling retries, Redis replay, and multi-worker fan-out. Any future change that makes inference non-deterministic (e.g., time-dependent state, random side effects) must be explicitly flagged and reviewed against this invariant.
+
+## Future Evolution Notes (not in scope now)
+
+- Polling sensitivity thresholds (`FEATURE_FLAGS["polling_sensitivity"]`) are runtime policy controls, not pure heuristics — future work may derive them statistically per city
+- NORMAL-state exclusion from DB may require compressed aggregation or periodic baseline snapshots to support pre-event context reconstruction and calibration drift detection
+- Redis subscriber lifecycle may eventually migrate into a dedicated transport runtime layer as the system scales to many workers
