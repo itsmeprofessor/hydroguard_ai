@@ -14,8 +14,7 @@ HydroGuard-AI v3.2 is a production-grade flood / weather-anomaly detection syste
 System surface area:
 
 - **FastAPI backend** (`backend/`) — **city-specific hybrid ML** (Autoencoder + **TCN** + **LightGBM FusionModel** + **IsotonicCalibrator**, one model-set per city), JWT auth with refresh-token rotation, WebSocket real-time push, SQLAlchemy persistence, slowapi rate limits (applied on auth and city predict). Falls back to a rule-based heuristic when a city's model has not been trained yet.
-- **Public Citizen Web App** (`frontend/citizen_app/`) — minimal, friendly. Five screens (Home / Forecast / Alerts / Learn / Settings), live polling every 5 minutes, light/dark mode, English + Urdu/Punjabi/Pashto/Sindhi/Balochi locale chooser. Connects to the backend via `/api/v2/*` endpoints with `/cities/*` fallback.
-- **Admin Web Dashboard** (`frontend/web_dashboard/admin_dashboard/`) — JSX served via Babel-Standalone (no build step), JWT login, Pakistan SVG risk map, real-time WebSocket feed, **per-city model status / training trigger**.
+- **Flutter App** (`frontend/citizen_flutter_app/`) — unified app for both Citizens and Admins. Role-based routing via GoRouter: `USER` role → Citizen shell (6 screens: Home / Forecast / Map / Alerts / Learn / Settings); `ADMIN` role → Admin shell (5 screens: Dashboard / Monitoring / Analytics / Cities / Settings). Stack: Riverpod + Dio + GoRouter. Builds to web (`flutter build web`) served by nginx; also runs as native mobile/desktop.
 
 Backed in production by `docker-compose` (Postgres 16 + Redis 7 + API + nginx **with HTTPS**).
 
@@ -59,22 +58,25 @@ python scripts/train_city.py --city Karachi  --no-tcn   # AE-only fallback
 docker compose up --build
 ```
 
-### Public Citizen Web App
-
-No build step. Served from FastAPI `/citizen` (mounted in `app/main.py`) or directly from `frontend/citizen_app/` via any static server. Boots React 18 + Babel from CDN; load order: `api.js` → `citizen-icons.jsx` → `citizen-screens.jsx` → `citizen-settings.jsx` → `citizen-app.jsx`.
+### Flutter App (primary frontend)
 
 ```bash
-# Local dev
-cd frontend/citizen_app
-python -m http.server 5500   # then open http://localhost:5500/index.html
+# Dev — run in Chrome against local backend
+cd frontend/citizen_flutter_app
+flutter run -d chrome --dart-define=API_BASE=http://localhost:8000
 
-# Override API base URL for the citizen app
-# (set window.__HYDROGUARD_API__ before loading api.js, or fall back to same origin)
+# Dev — Android emulator
+flutter run -d emulator-5554 --dart-define=API_BASE=http://10.0.2.2:8000
+
+# Dev — physical device (replace with your LAN IP)
+flutter run --dart-define=API_BASE=http://192.168.x.x:8000
+
+# Build web (output → build/web/, served by nginx in Docker)
+flutter build web --dart-define=API_BASE=''
+
+# Run tests
+flutter test
 ```
-
-### Admin Web Dashboard
-
-No build step. Serve `frontend/web_dashboard/admin_dashboard/` statically (nginx in compose, or `python -m http.server` for local). The page boots React 18 + Babel from CDN and sequentially loads JSX files in the order set by `index.html`.
 
 ---
 
@@ -276,70 +278,33 @@ Logging: rotating file at `logs/hydroguard.log` (10 MB × 5) + console.
 
 ---
 
-### Public Citizen Web App (`frontend/citizen_app/`)
+### Flutter App (`frontend/citizen_flutter_app/`)
 
-**Visual design** mirrors the provided `frontend design for fyp/NewWebAPP.zip` exactly — the design is the spec. The Zip's "3 iPhones side-by-side showcase" was adapted to a **single full-page web app** with responsive layout (top bar + content on desktop; bottom tab bar on mobile <900 px).
+Single unified Flutter app — both the public Citizen interface and the Admin Dashboard live here, separated by role-based routing.
 
-**Files** (load order in `index.html`):
-1. `api.js` — plain JS HydroAPI client. Public methods: `getCities`, `getOverview`, `getCityRisk(city)`, `predict(city, weather)`, `getForecast(city)`, `getAlerts(city, n)`, `health()`, `clearCache()`. 5-minute TTL local cache + retry-with-backoff.
-2. `citizen-icons.jsx` — `<CIcon name=…/>` SVG icon set (≈40 icons). Identical to the zip's design.
-3. `citizen-screens.jsx` — five screens: `HomeScreen`, `ForecastScreen`, `AlertsScreen`, `LearnScreen`. **Adapted to consume real backend data** instead of the hardcoded `SCENARIO_DATA` from the zip mock-up. Includes `RiskMeter` (HRI gauge), `ForecastChart` (SVG area chart), and `Skeleton` placeholders for loading states.
-4. `citizen-settings.jsx` — `SettingsScreen` (city picker as a bottom-sheet modal, language picker for English/Urdu/Punjabi/Pashto/Sindhi/Balochi, dark-mode toggle, notification prefs). **Verbatim from the zip**.
-5. `citizen-app.jsx` — root `App`. Manages tab/city/theme/prefs in `localStorage`, fetches data on city change, polls every 5 min, shows toast notifications. Top-bar nav on desktop; bottom-tab nav on mobile.
+**Stack:** Flutter 3.x · Riverpod (state) · Dio (HTTP) · GoRouter (navigation) · flutter_secure_storage (tokens) · fl_chart (charts) · flutter_map + OpenStreetMap (map screen)
 
-**Data flow**: `App` calls `HydroAPI.getCityRisk()` + `getForecast()` + `getAlerts()` in parallel via `Promise.allSettled` on city change. Failures degrade gracefully — heuristic data is shown with a `Rule-based` badge in the risk strip, and a toast informs the user.
+**Auth flow (`lib/features/auth/`):**
+- `SplashScreen` — on start calls `/auth/me`; routes to `/citizen/home` (USER) or `/admin/dashboard` (ADMIN), or `/login` if unauthenticated.
+- `LoginScreen`, `SignupScreen`, `ForgotPasswordScreen` — call backend `/auth/*` endpoints.
 
-**Scenario mapping** (`riskToScenario` in `citizen-screens.jsx`): API `risk_level` → UI scenario.
-- `Low`     → `safe` (blue-cyan tones, "All clear")
-- `Medium`  → `warn` (amber, "Heads up")
-- `High`    → `crit` (red, "High risk alert", animated pulse banner, alerts tab badge)
+**Role-based routing (`lib/core/router/app_router.dart`):**
+- GoRouter `redirect` guard: redirects `/splash` → role-appropriate home; blocks `/admin/*` for non-admin users.
+- Citizen shell (`/citizen/*`): Home, Forecast, Map, Alerts, Learn, Settings.
+- Admin shell (`/admin/*`): Dashboard, Monitoring, Analytics, Cities, Settings.
 
-**Design tokens** (`citizen-styles.css`): `oklch`-free, hex-based `--c-*` palette directly from the zip; dark-mode triggered via `body.dark` class or `[data-theme="dark"]` attribute.
+**Data layer (`lib/repositories/`):**
+- `AuthRepository` — login/register/logout/refresh; stores access + refresh tokens in flutter_secure_storage.
+- `CityRepository` — city list, risk, forecast, alerts via `/api/v2/cities/*`.
+- `AdminRepository` — anomalies, training trigger, analytics via v2 + admin endpoints.
 
-**Local persistence**: `localStorage` keys — `hg-tab`, `hg-city`, `hg-theme`, `hg-prefs` (JSON: `{city, lang, notifications, criticalOnly, quietHours, sms, shareData}`).
+**State management (`lib/shared/providers/app_provider.dart`):** Riverpod providers for auth state, selected city, theme prefs (dark mode, big text).
 
-**Backend mount**: served from FastAPI at `/citizen` (mounted in `app/main.py` lifespan; `StaticFiles(html=True)`). The API auto-detects same-origin in production; localhost falls back to `http://127.0.0.1:8000`.
+**API base URL:** configured via `--dart-define=API_BASE=...`. Web builds use empty string (same-origin via nginx proxy); mobile/desktop dev use `http://localhost:8000` (or LAN IP for physical device; `http://10.0.2.2:8000` for Android emulator).
 
----
+**Deployment:** `flutter build web` → `build/web/` mounted into nginx container at `/usr/share/nginx/html`. All non-API paths fall through to Flutter SPA (`try_files $uri $uri/ /index.html`).
 
-### Web Dashboard (`frontend/web_dashboard/admin_dashboard/`)
-
-Static React 18 served by nginx; **no bundler**. JSX is transformed in-browser by Babel-Standalone.
-
-#### Boot sequence (`index.html`)
-
-1. Boot screen with spinner; `#err-box` on-page error display (no DevTools needed).
-2. Loads CDN: React 18.3.1, ReactDOM 18.3.1, Babel-Standalone 7.26.10.
-3. **Sequential JSX loader**: fetches → `Babel.transform(..., { presets: ['react'] })` → `eval()` in strict order: `api.js` → `components.jsx` → `viz.jsx` → `screens/*.jsx` → `app.jsx` (mounts root). Order matters because each file populates `window.*` globals consumed by later files.
-
-#### `api.js` — plain JS (no JSX)
-
-- **Token storage**: `sessionStorage` keys `hg_access_token`, `hg_refresh_token`, `hg_role`, `hg_username`.
-- **`req(method, path, body, extraHeaders, _retried)`**: adds `Authorization: Bearer <token>`; on 401 calls `doRefresh()` (queues concurrent calls so refresh fires once) and retries one time. Refresh failure → clears tokens + dispatches `hg:unauthorized` event for `app.jsx` to react.
-- **`window.API`**: `login`, `register`, `logout`, `isLoggedIn`, `getMe`, `getAnomalies`, `getAnomalyStats`, `getAnomalyById`, `getRiskMap`, `getAnalytics`, `train`, `getHealth`, `getModelInfo`, `getDatabaseStats`, `connectWs(onMessage, onClose)`, `BASE`.
-
-#### `app.jsx` — root shell + router
-
-Sidebar nav groups: **Operations** (Dashboard, Real-time monitoring, Cloudburst, Flash flood) · **Intelligence** (Analytics, City management, Run prediction) · **System** (Settings, User management, Database) · Logout. Holds `liveEvents` array fed by WS, `alertFiring` for critical events. `CITY_SVG_MAP` carries lat/lon/population per city.
-
-#### `components.jsx`
-
-Inline-SVG `Icon` set (50+ icons), animated `BrandMark`, `Sparkline`, button/card/dialog/tabs primitives — all styled against `styles.css` design tokens.
-
-#### `viz.jsx`
-
-`PakistanMap` (720×620 viewBox SVG with selectable city circles, heat gradient by risk in `oklch`, hover tooltips), `RiskMeterComponent` gauge, generic chart wrappers.
-
-#### `screens/`
-
-- `landing-auth.jsx` — pre-login: `/health` summary + login/register forms.
-- `dashboard.jsx` — recent anomalies, time-series chart, latest prediction card, alert table.
-- `cloudburst-flood.jsx` — event log, time-range filter, terminal-style WS feed.
-- `others.jsx` — `MonitoringScreen`, `AnalyticsScreen`, `CityManagementScreen`, `PredictScreen`, `SettingsScreen`, `UserManagementScreen` (all in one file; intentional, since each is small).
-
-#### `styles.css`
-
-`oklch` palette as CSS custom properties, `.theme-light` override, 232 px sidebar + 1 fr main grid, mobile media queries.
+**Legacy frontends** (still in repo, not primary): `frontend/citizen_app/` (React, served by FastAPI at `/citizen`) and `frontend/web_dashboard/admin_dashboard/` (JSX/Babel, legacy admin reference).
 
 ---
 
@@ -398,8 +363,7 @@ Classes: `TestSystem` (root, health, model info, database statistics), `TestAnom
 - **ML architecture is fixed**: Autoencoder + **TCN** + **LightGBM FusionModel** + **IsotonicCalibrator** per-city. No BiTCN, no LSTM, no BahdanauAttention — strictly causal. MC Dropout provides epistemic uncertainty. `anomaly_service` is decommissioned; the fallback for untrained cities is the rule-based heuristic in `city_model_service`.
 - **City-specific models are required**: each city trains its own AE+TCN+FusionModel set (`scripts/train_city.py`). `CityModelService` lazy-loads them; missing models route through the rule-based heuristic. Don't replace the per-city design with a single global model.
 - **Standardised output dict**: v2 predictions return `{ inference_id, event_probability, confidence_interval, uncertainty, risk_band, hri_score, is_alert, alert_tier, component_scores, drivers, sequence_context, inference_mode, epistemic_uncertainty, prediction_stability, degraded_reason }`. The v1 `/cities/{city}/forecast` translates `risk_band` to scenario `safe | warn | crit` via `_risk_to_scenario`.
-- **Citizen web app must follow the zip design**: do not redesign hero cards, color tokens, or layout primitives without referencing `frontend design for fyp/NewWebAPP.zip`. The zip is the visual contract.
-- **Mobile dependencies removed in v3.1**: the Flutter project (`frontend/weather_anomaly_app/`) is deprecated — do not extend it. All new client work goes into the web apps.
+- **Flutter app is the primary frontend**: `frontend/citizen_flutter_app/` is the only actively maintained frontend. The original Flutter project (`frontend/weather_anomaly_app/`) and the legacy React apps (`citizen_app/`, `web_dashboard/`) are deprecated — do not extend them. All new client work goes into `citizen_flutter_app`.
 - **JWT secret must be set** in production; the placeholder logs a warning but the app still runs (tokens are guessable).
 - **WebSocket auth uses `?token=` query param** intentionally — browsers cannot send custom headers on the WS handshake.
 - **`AnomalyRepository` canonical location**: `app/db/repositories/anomaly_repo.py`. The old broken copy embedded in `anomaly_service.py` was deleted in v3.0 — do not resurrect it.
@@ -408,8 +372,7 @@ Classes: `TestSystem` (root, health, model info, database statistics), `TestAnom
 - **`asyncio_mode = "auto"`** — do not add `@pytest.mark.asyncio` decorators; they are unnecessary and noisy.
 - **SQLite ↔ PostgreSQL**: multi-worker prod requires PostgreSQL; SQLite has write races at `--workers > 1`. `run_server.py` warns when this combo is used.
 - **`require_admin` accepts both** JWT `role=ADMIN` and legacy `X-Admin-Token` header — keep both paths working.
-- **Web dashboard is JSX-via-CDN-Babel**, not a bundler build. Don't introduce JSX-only syntax that Babel-Standalone cannot transform, and respect the load order in `index.html` — every `window.*` global must exist by the time the next file evals. The new `screens/screens.jsx` is loaded **after** the legacy screens so it intentionally overrides them.
-- **Citizen app uses fetch-based caching, not WebSockets**: HydroAPI has a 5-minute in-memory TTL cache. To force a refresh, call `HydroAPI.clearCache()` (the Refresh button does this). Don't add WebSocket clients to the citizen app — keep it polling-only for simpler offline behaviour.
+- **Flutter app uses Dio for HTTP, not browser fetch**: `ApiClient` (Dio-based) in `lib/core/network/api_client.dart` handles auth header injection, token refresh on 401, and `--dart-define=API_BASE` resolution. Don't add raw `http` package calls — go through `ApiClient` or the repository layer.
 - **WebSocket fan-out is per-worker**: today's deployment is single-worker. If you scale uvicorn, you'll need a Redis pub/sub bridge between `ConnectionManager` instances.
 - **City model loading is thread-safe via per-slug RLock** — concurrent first-touch predictions race on the same lock and only one filesystem load happens per city.
 - **CORS with `*`**: when `CORS_ORIGINS` contains `*`, FastAPI cannot allow credentials. The dashboard's auth flow requires specific origins (with credentials) in production.
