@@ -1,5 +1,5 @@
 """
-HydroGuard-AI — FastAPI Application Factory v3.1
+HydroGuard-AI — FastAPI Application Factory v3.2
 """
 
 from __future__ import annotations
@@ -219,17 +219,6 @@ def create_app() -> FastAPI:
     # ── Static files ──────────────────────────────────────────────────────────
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-    @app.get("/frontend", include_in_schema=False)
-    async def serve_frontend():
-        index = STATIC_DIR / "index.html"
-        if index.exists():
-            return FileResponse(str(index))
-        return JSONResponse({"error": "Frontend not built"}, status_code=404)
-
-    @app.get("/dashboard", include_in_schema=False)
-    async def serve_dashboard():
-        return await serve_frontend()
 
     # ── Exception handlers ────────────────────────────────────────────────────
     @app.exception_handler(HTTPException)

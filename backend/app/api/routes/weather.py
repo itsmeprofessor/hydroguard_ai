@@ -1,7 +1,7 @@
 """
 HydroGuard-AI — Live Weather API Routes
 =========================================
-Endpoints that proxy live weather data from Open-Meteo / OpenWeatherMap,
+Endpoints that proxy live weather data from WeatherAPI.com,
 running city-specific predictions against the live observations.
 
 GET /weather/{city}/current      — live weather + instant risk prediction

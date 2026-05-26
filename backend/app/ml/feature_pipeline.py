@@ -27,6 +27,116 @@ logger = logging.getLogger(__name__)
 MONSOON_MONTHS      = {6, 7, 8, 9}
 FLASH_FLOOD_CITIES  = {"islamabad", "rawalpindi", "peshawar", "lahore", "karachi"}
 
+# Arabian Sea cyclone season: May–November (peak Jun–Oct)
+ARABIAN_SEA_CYCLONE_SEASON = {5, 6, 7, 8, 9, 10, 11}
+
+
+def _karachi_coastal_features(
+    raw: Dict[str, Any],
+    month: int,
+    day: int,
+    pressure_delta_3h: Optional[float],
+    pressure_delta_6h: Optional[float],
+    humidity_delta_3h: Optional[float],
+    rain_accumulation_6h: Optional[float],
+) -> Dict[str, float]:
+    """
+    Karachi-specific coastal feature engineering.
+
+    Karachi sits on the Arabian Sea coast: its flood/cloudburst risk
+    is driven by completely different mechanisms than northern monsoon systems:
+      - Sea-breeze instability (land-sea thermal gradient)
+      - Cyclonic systems from the Arabian Sea
+      - Urban drainage stress (flat terrain, dense impervious surface)
+      - Humidity persistence from sea moisture
+      - Coastal pressure gradients
+
+    These features are derived from existing weather variables without
+    external APIs. When Karachi is retrained with these features added to
+    its preprocessor, discrimination will improve significantly.
+    """
+    humidity    = float(raw.get("humidity",    50.0) or 50.0)
+    pressure    = float(raw.get("pressure",    1013.0) or 1013.0)
+    tmax        = float(raw.get("tmax",        30.0) or 30.0)
+    tmin        = float(raw.get("tmin",        25.0) or 25.0)
+    tavg        = float(raw.get("tavg",        (tmax + tmin) / 2) or (tmax + tmin) / 2)
+    dew_point   = float(raw.get("dew_point",   tavg - 5.0) or (tavg - 5.0))
+    wspd        = float(raw.get("wspd",        0.0) or 0.0)
+    prcp        = float(raw.get("prcp",        0.0) or 0.0)
+    cloud_cover = float(raw.get("cloud_cover", 0.0) or 0.0)
+
+    # ── Sea surface temperature anomaly proxy ─────────────────────────────
+    # Arabian Sea SST seasonal baseline (°C): peaks Jun-Sep ~29-30°C
+    # Proxy: compare tavg to seasonal SST baseline; warmer = more evaporation
+    sst_baseline_by_month = {
+        1: 24.5, 2: 24.0, 3: 25.0, 4: 27.0, 5: 28.5,
+        6: 29.5, 7: 29.5, 8: 29.0, 9: 28.5, 10: 27.5,
+        11: 26.0, 12: 25.0,
+    }
+    sst_baseline    = sst_baseline_by_month.get(month, 27.0)
+    sst_anomaly     = tavg - sst_baseline        # positive = anomalously warm
+
+    # ── Sea-breeze instability ────────────────────────────────────────────
+    # Sea breeze strengthens when land is much hotter than sea.
+    # High diurnal range + high humidity = convective instability
+    diurnal_range         = max(tmax - tmin, 0.0)
+    sea_breeze_instability = diurnal_range * (humidity / 100.0) * (1 - pressure / 1020.0)
+
+    # ── Cyclone proximity proxy ───────────────────────────────────────────
+    # Actual cyclone track data not available — use concurrent indicators:
+    # rapid pressure drop + high wind + high humidity in cyclone season
+    cyclone_season        = int(month in ARABIAN_SEA_CYCLONE_SEASON)
+    pressure_drop_3h      = abs(pressure_delta_3h) if pressure_delta_3h else 0.0
+    pressure_drop_6h      = abs(pressure_delta_6h) if pressure_delta_6h else 0.0
+    cyclone_proxy         = float(
+        cyclone_season
+        * (pressure_drop_3h / 5.0)      # normalise: 5 hPa/3h = strong signal
+        * min(wspd / 30.0, 1.0)          # normalise: 30 km/h
+        * (humidity / 100.0)
+    )
+
+    # ── Humidity persistence ─────────────────────────────────────────────
+    # Sustained high humidity (slow-moving marine air mass) = flooding risk
+    # Proxy: current humidity × (1 - |humidity_delta_3h| / 20)
+    # Delta near 0 = humidity has been stable (persistent marine air)
+    hum_delta   = abs(humidity_delta_3h) if humidity_delta_3h else 5.0  # assume moderate change
+    hum_persist = (humidity / 100.0) * (1.0 - min(hum_delta / 30.0, 1.0))
+
+    # ── Coastal moisture flux ─────────────────────────────────────────────
+    # Enhanced moisture_flux for onshore winds (generic direction assumed)
+    coastal_moisture = (humidity / 100.0) * min(wspd / 20.0, 1.0) * (1 - pressure / 1020.0)
+
+    # ── Urban drainage stress ─────────────────────────────────────────────
+    # Karachi has poor drainage; even moderate rain causes flooding
+    # Stress = rain accumulation weighted by ground saturation proxy
+    rain_acc   = rain_accumulation_6h or prcp * 6    # rough proxy if no history
+    drain_stress = min(rain_acc / 30.0, 1.0) * (humidity / 100.0)
+
+    # ── Tidal influence proxy ─────────────────────────────────────────────
+    # Arabian Sea has mixed semi-diurnal tides (~2–3m range in Karachi)
+    # Proxy: sin-based seasonal + intra-month variation (no real tidal model)
+    import math
+    tidal_proxy = 0.5 * (
+        math.sin(2 * math.pi * month / 12)     # seasonal
+        + math.sin(2 * math.pi * day / 29.5)   # lunar month proxy
+    )
+
+    # ── Pressure gradient proxy ───────────────────────────────────────────
+    # Large 6h pressure gradient = organised convective system approaching
+    pressure_gradient = (pressure_drop_6h / 10.0)   # normalise: 10 hPa/6h
+
+    return {
+        "sst_anomaly":           round(sst_anomaly,          4),
+        "sea_breeze_instability":round(sea_breeze_instability, 4),
+        "cyclone_proximity":     round(min(cyclone_proxy, 1.0), 4),
+        "humidity_persistence":  round(hum_persist,          4),
+        "coastal_moisture_flux": round(coastal_moisture,     4),
+        "urban_drainage_stress": round(drain_stress,         4),
+        "tidal_proxy":           round(tidal_proxy,          4),
+        "coastal_pressure_grad": round(pressure_gradient,    4),
+        "cyclone_season":        float(cyclone_season),
+    }
+
 
 def _slug(city: str) -> str:
     return city.strip().lower().replace(" ", "_").replace("-", "_")
@@ -81,6 +191,17 @@ class EnrichedFeatures:
     vulnerability:        float = 0.65
     is_flash_flood_prone: int   = 0
 
+    # ── Karachi coastal features (None for non-coastal cities) ─
+    sst_anomaly:           Optional[float] = None
+    sea_breeze_instability:Optional[float] = None
+    cyclone_proximity:     Optional[float] = None
+    humidity_persistence:  Optional[float] = None
+    coastal_moisture_flux: Optional[float] = None
+    urban_drainage_stress: Optional[float] = None
+    tidal_proxy:           Optional[float] = None
+    coastal_pressure_grad: Optional[float] = None
+    cyclone_season:        Optional[float] = None
+
     # ── Observed at ────────────────────────────────────────
     observed_at: Optional[datetime] = None
 
@@ -92,6 +213,14 @@ class EnrichedFeatures:
             "pressure_delta_3h", "pressure_delta_6h", "humidity_delta_3h",
             "rain_rate_1h", "rain_accumulation_3h", "rain_accumulation_6h",
             "cloud_jump_3h",
+        ):
+            if d[key] is None:
+                d[key] = 0.0
+        # Coastal features: replace None with 0.0 (non-coastal cities have no signal)
+        for key in (
+            "sst_anomaly", "sea_breeze_instability", "cyclone_proximity",
+            "humidity_persistence", "coastal_moisture_flux", "urban_drainage_stress",
+            "tidal_proxy", "coastal_pressure_grad", "cyclone_season",
         ):
             if d[key] is None:
                 d[key] = 0.0
@@ -217,6 +346,20 @@ async def build_features(
     except Exception:
         pass
 
+    # ── 7. Karachi coastal features ──────────────────────────
+    coastal: Dict[str, Optional[float]] = {
+        "sst_anomaly": None, "sea_breeze_instability": None,
+        "cyclone_proximity": None, "humidity_persistence": None,
+        "coastal_moisture_flux": None, "urban_drainage_stress": None,
+        "tidal_proxy": None, "coastal_pressure_grad": None, "cyclone_season": None,
+    }
+    if slug == "karachi":
+        coastal = _karachi_coastal_features(
+            raw_weather, month, day,
+            pressure_delta_3h, pressure_delta_6h,
+            humidity_delta_3h, rain_accumulation_6h,
+        )
+
     return EnrichedFeatures(
         city_slug    = slug,
         prcp         = prcp,
@@ -249,6 +392,16 @@ async def build_features(
         season            = season,
         vulnerability     = vulnerability,
         is_flash_flood_prone = is_flash_flood_prone,
+        # Karachi coastal features (None for all other cities)
+        sst_anomaly           = coastal.get("sst_anomaly"),
+        sea_breeze_instability= coastal.get("sea_breeze_instability"),
+        cyclone_proximity     = coastal.get("cyclone_proximity"),
+        humidity_persistence  = coastal.get("humidity_persistence"),
+        coastal_moisture_flux = coastal.get("coastal_moisture_flux"),
+        urban_drainage_stress = coastal.get("urban_drainage_stress"),
+        tidal_proxy           = coastal.get("tidal_proxy"),
+        coastal_pressure_grad = coastal.get("coastal_pressure_grad"),
+        cyclone_season        = coastal.get("cyclone_season"),
         observed_at       = now,
     )
 
@@ -274,31 +427,3 @@ def features_to_fusion_dict(ef: EnrichedFeatures) -> Dict[str, float]:
         "is_monsoon_month":     float(d["is_monsoon_month"]),
         "vulnerability":        d["vulnerability"],
     }
-if __name__ == "__main__":
-    import asyncio
-
-    async def _test():
-        sample_weather = {
-            "prcp": 12.3,
-            "humidity": 78,
-            "pressure": 1008,
-            "cloud_cover": 65,
-            "tmax": 31,
-            "tmin": 24,
-            "dew_point": 22,
-            "wspd": 5.2
-        }
-
-        features = await build_features(
-            city_slug="Islamabad",
-            raw_weather=sample_weather,
-            rolling_buffer=None,
-            climatology=None
-        )
-
-        print("\nFEATURE PIPELINE OUTPUT:\n")
-        print(features)
-        print("\nFUSION DICT:\n")
-        print(features_to_fusion_dict(features))
-
-    asyncio.run(_test())

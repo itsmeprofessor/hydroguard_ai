@@ -40,14 +40,13 @@ async def trigger_city_training(
 @router.get("/{city}/status")
 async def training_status(city: str, _admin=Depends(require_admin)):
     """Latest training run status for a city (Admin only)."""
-    from app.services.city_model_service import _slug, city_model_service
+    import json
+    from app.core.config import CITY_MODELS_DIR
+    from app.services.city_model_service import _slug
     slug = _slug(city)
-    metrics_path = __import__("pathlib").Path(
-        f"backend/saved_models/city_models/{slug}/training_metrics.json"
-    )
+    metrics_path = CITY_MODELS_DIR / slug / "training_metrics.json"
     if not metrics_path.exists():
         return {"city_slug": slug, "status": "never_trained"}
-    import json
     return json.loads(metrics_path.read_text())
 
 

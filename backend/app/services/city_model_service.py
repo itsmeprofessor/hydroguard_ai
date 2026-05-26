@@ -37,7 +37,7 @@ import numpy as np
 from app.core.config import DATA_DIR, MODELS_DIR, MCInferenceConfig, HealthCollectorConfig
 from app.ml.models.city_hybrid import CityHybridModel
 from app.ml.models.tcn import TCN_SEQ_LEN
-SEQUENCE_LENGTH = TCN_SEQ_LEN  # 24 — keep backward-compat name
+SEQUENCE_LENGTH = TCN_SEQ_LEN  # 30 — keep backward-compat name
 
 logger = logging.getLogger(__name__)
 

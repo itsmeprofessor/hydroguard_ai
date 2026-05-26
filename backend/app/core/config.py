@@ -29,10 +29,11 @@ load_dotenv(Path(__file__).parents[3] / ".env")
 # parents[1] = .../app/
 # parents[2] = .../backend/   ← BACKEND_DIR
 # parents[3] = .../hydroguard_ai/
-BACKEND_DIR:  Path = Path(__file__).parents[2]          # .../backend/
-DATA_DIR:     Path = BACKEND_DIR / "data"
-MODELS_DIR:   Path = BACKEND_DIR / "saved_models"
-LOGS_DIR:     Path = BACKEND_DIR / "logs"
+BACKEND_DIR:     Path = Path(__file__).parents[2]          # .../backend/
+DATA_DIR:        Path = BACKEND_DIR / "data"
+MODELS_DIR:      Path = BACKEND_DIR / "saved_models"
+CITY_MODELS_DIR: Path = MODELS_DIR / "city_models"
+LOGS_DIR:        Path = BACKEND_DIR / "logs"
 STATIC_DIR:   Path = BACKEND_DIR.parent / "frontend" / "web_dashboard" / "admin_dashboard"  # served as /static
 
 for _d in (DATA_DIR, MODELS_DIR, LOGS_DIR):

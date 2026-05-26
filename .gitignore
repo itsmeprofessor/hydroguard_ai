@@ -36,6 +36,7 @@ ENV/
 # ML artifacts (kept in volumes / object storage in prod)
 backend/saved_models/**/*.keras
 backend/saved_models/**/*.joblib
+backend/saved_models/**/*.pkl
 !backend/saved_models/.gitkeep
 
 # Logs
@@ -57,16 +58,19 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
-# Flutter / Dart build artifacts
-weather_anomaly_app/.dart_tool/
-weather_anomaly_app/build/
-weather_anomaly_app/.flutter-plugins-dependencies
-weather_anomaly_app/android/local.properties
-weather_anomaly_app/ios/Flutter/ephemeral/
-weather_anomaly_app/macos/Flutter/ephemeral/
-weather_anomaly_app/windows/flutter/ephemeral/
-weather_anomaly_app/linux/flutter/ephemeral/
-weather_anomaly_app/pubspec.lock
+# Flutter / Dart build artifacts (citizen_flutter_app — primary frontend)
+frontend/citizen_flutter_app/.dart_tool/
+frontend/citizen_flutter_app/build/
+frontend/citizen_flutter_app/.flutter-plugins-dependencies
+frontend/citizen_flutter_app/android/local.properties
+frontend/citizen_flutter_app/ios/Flutter/ephemeral/
+frontend/citizen_flutter_app/macos/Flutter/ephemeral/
+frontend/citizen_flutter_app/windows/flutter/ephemeral/
+frontend/citizen_flutter_app/linux/flutter/ephemeral/
+# pubspec.lock is committed intentionally for reproducible builds
+
+# Model backup directories (created by train_city.py --all reruns)
+backend/saved_models/city_models/*.bak/
 
 # Evaluation artifacts (large CSVs)
 backend/evaluation_results/*.csv

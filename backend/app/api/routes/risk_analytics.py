@@ -16,58 +16,48 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Risk & Analytics"])
 
-PAKISTAN_CITIES = [
-    {"name": "Islamabad",  "region": "Punjab",           "lat": 33.6844, "lon": 73.0479},
-    {"name": "Rawalpindi", "region": "Punjab",           "lat": 33.5651, "lon": 73.0169},
-    {"name": "Lahore",     "region": "Punjab",           "lat": 31.5204, "lon": 74.3587},
-    {"name": "Karachi",    "region": "Sindh",            "lat": 24.8607, "lon": 67.0011},
-    {"name": "Peshawar",   "region": "KPK",              "lat": 34.0151, "lon": 71.5249},
-    {"name": "Quetta",     "region": "Balochistan",      "lat": 30.1798, "lon": 66.9750},
-    {"name": "Gilgit",     "region": "Gilgit-Baltistan", "lat": 35.9208, "lon": 74.3144},
-    {"name": "Faisalabad", "region": "Punjab",           "lat": 31.4504, "lon": 73.1350},
-    {"name": "Multan",     "region": "Punjab",           "lat": 30.1575, "lon": 71.5249},
-    {"name": "Hyderabad",  "region": "Sindh",            "lat": 25.3960, "lon": 68.3578},
-]
-
 
 @router.get("/risk-map", response_model=RiskMapResponse)
 async def get_risk_map():
     """
-    Return current HRI risk levels for all major Pakistan cities.
-    Uses city_model_service (v2 inference path).
+    Return current HRI risk levels for all registered cities.
+    City list is dynamic — derived from CITY_REGISTRY (CSV + saved models).
     """
-    import asyncio
+    from app.api.routes.city_predictions import _default_weather
     entries: List[RiskMapEntry] = []
     now = datetime.now(timezone.utc)
 
-    for city_info in PAKISTAN_CITIES:
-        slug = _slug(city_info["name"])
+    for meta in city_model_service.list_cities():
+        slug   = meta["slug"]
+        name   = meta["name"]
+        region = meta.get("province", "")
+        lat    = meta.get("lat", 0.0)
+        lon    = meta.get("lon", 0.0)
+
+        # Use climatological defaults rather than all-zeros
+        weather_defaults = _default_weather(slug)
         payload = {
-            "city":     city_info["name"],
-            "region":   city_info["region"],
-            "date":     now.strftime("%Y-%m-%d"),
-            "month":    now.month,
-            "day":      now.day,
-            "prcp":     0.0,
-            "humidity": 60.0,
-            "pressure": 1013.0,
+            "city":    name,
+            "date":    now.strftime("%Y-%m-%d"),
+            "month":   now.month,
+            "day":     now.day,
+            **weather_defaults,
         }
         try:
             result = city_model_service.predict(slug, payload)
-            # Map v1-style risk_level to hri fields for backward compat
             risk = result.get("risk_level", "Low")
             hri  = result.get("hri_score", 0)
             entries.append(RiskMapEntry(
-                city       = city_info["name"],
-                region     = city_info["region"],
-                latitude   = city_info["lat"],
-                longitude  = city_info["lon"],
+                city       = name,
+                region     = region,
+                latitude   = lat,
+                longitude  = lon,
                 hri_score  = hri,
                 risk_level = risk,
                 hri_label  = "Low" if hri < 25 else "Guarded" if hri < 50 else "Elevated" if hri < 75 else "Severe",
             ))
         except Exception as e:
-            logger.warning("risk-map predict failed for %s: %s", city_info["name"], e)
+            logger.warning("risk-map predict failed for %s: %s", name, e)
 
     return RiskMapResponse(entries=entries, count=len(entries))
 

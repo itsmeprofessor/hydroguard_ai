@@ -21,9 +21,8 @@ class TrainingRepository:
             except Exception:
                 return datetime.utcnow()
 
-        ae   = training_metadata.get("autoencoder", {}) or {}
-        lstm = training_metadata.get("lstm") or {}
-        ast  = training_metadata.get("anomaly_stats", {}) or {}
+        ae  = training_metadata.get("autoencoder", {}) or {}
+        ast = training_metadata.get("anomaly_stats", {}) or {}
 
         record = TrainingRecord(
             training_started          = datetime.utcnow(),
@@ -40,9 +39,6 @@ class TrainingRepository:
             final_val_loss            = ae.get("final_val_loss"),
             epochs_trained            = ae.get("epochs_trained"),
             threshold                 = ae.get("threshold"),
-            lstm_enabled              = bool(lstm),
-            lstm_final_loss           = lstm.get("final_loss"),
-            lstm_epochs_trained       = lstm.get("epochs_trained"),
             total_anomalies_detected  = ast.get("total_anomalies_detected"),
             anomaly_percentage        = ast.get("anomaly_percentage"),
             status                    = "completed",

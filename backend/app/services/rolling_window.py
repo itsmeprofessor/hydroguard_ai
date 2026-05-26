@@ -231,25 +231,7 @@ class RollingWindowBuffer:
             if current_obs and obs_1h and current_obs.precip_mm is not None and obs_1h.precip_mm is not None:
                 deltas.rain_rate_1h = max(0.0, current_obs.precip_mm - obs_1h.precip_mm)
 
-            # Rain accumulation (cumulative mm in window)
-            def _accumulate_precip(obs_start, obs_end) -> Optional[float]:
-                if obs_start is None or obs_end is None:
-                    return None
-                t_start = obs_start[1] if isinstance(obs_start, tuple) else now_ts - 6*3600
-                t_end   = now_ts
-                total   = 0.0
-                count   = 0
-                prev_precip: Optional[float] = None
-                for obs, score in entries:
-                    if t_start <= score <= t_end:
-                        if obs.precip_mm is not None:
-                            if prev_precip is not None:
-                                total += max(0.0, obs.precip_mm - prev_precip)
-                            prev_precip = obs.precip_mm
-                            count += 1
-                return total if count > 0 else None
-
-            # Simpler accumulation: sum of positive precip deltas in window
+            # Rain accumulation: sum of positive precip deltas in window
             def _sum_precip_window(hours: float) -> Optional[float]:
                 t_start = now_ts - hours * 3600
                 window_entries = [(o, s) for o, s in entries if s >= t_start]

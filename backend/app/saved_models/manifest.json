@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "trained_at": "2026-04-21T21:54:11.543197Z",
-  "ae_threshold": null,
-  "anomaly_rate": null,
-  "epochs": null,
-  "has_lstm": true
-}

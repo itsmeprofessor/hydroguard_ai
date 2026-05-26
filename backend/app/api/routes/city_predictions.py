@@ -188,8 +188,8 @@ async def _get_weather(slug: str) -> Dict[str, float]:
         return defaults
     try:
         live = await _weather_service.get_current(slug)
-        if live and live.get("is_live"):
-            # Merge: live values override defaults.
+        if live is not None:
+            # get_current() returns a WeatherSnapshot dataclass; convert to dict first.
             # Keys intentionally NOT overridden:
             #   tmin/tmax/temp_range — current-hour APIs return tmin=tmax=current_temp
             #                          (daily range=0), wildly out-of-distribution for
@@ -198,13 +198,13 @@ async def _get_weather(slug: str) -> Dict[str, float]:
             #                        daily-mean winds in the training CSV. Gilgit's
             #                        training wind std=0.5 km/h: even a 3 km/h gust
             #                        becomes a 6σ outlier after StandardScaler.
-            _LIVE_KEYS = ("prcp", "humidity", "pressure", "cloud_cover", "dew_point")
-            for k in _LIVE_KEYS:
-                if k in live and live[k] is not None:
-                    defaults[k] = float(live[k])
+            live_dict = live.to_feature_dict()
+            for k in ("prcp", "humidity", "pressure", "cloud_cover", "dew_point"):
+                if live_dict.get(k) is not None:
+                    defaults[k] = float(live_dict[k])
             # Update tavg from live temperature (sensible single-hour value)
-            if "tavg" in live and live["tavg"] is not None:
-                defaults["tavg"] = float(live["tavg"])
+            if live_dict.get("tavg") is not None:
+                defaults["tavg"] = float(live_dict["tavg"])
     except Exception as exc:
         logger.debug("Live weather fetch failed for %s (%s) — using climatology", slug, exc)
     return defaults

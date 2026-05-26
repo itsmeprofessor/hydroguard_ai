@@ -127,10 +127,6 @@ class TrainingRecord(Base):
     epochs_trained      = Column(Integer)
     threshold           = Column(Float)
 
-    lstm_enabled        = Column(Boolean, default=False)
-    lstm_final_loss     = Column(Float, nullable=True)
-    lstm_epochs_trained = Column(Integer, nullable=True)
-
     total_anomalies_detected = Column(Integer)
     anomaly_percentage       = Column(Float)
 
