@@ -86,19 +86,27 @@ flutter test
 
 **Entry point:** `backend/run_server.py` (CLI: `--host`, `--port/-p`, `--reload/-r`, `--workers/-w`) → uvicorn → `app/main.py::create_app()`.
 
-**App lifespan** (`app/main.py`):
+**App startup** — two functions run at boot: `lifespan()` (async context manager, startup/shutdown hooks) and `create_app()` (registers middleware, routes, and static mounts synchronously before the server accepts requests).
+
+**`lifespan()` startup sequence** (`app/main.py`):
 1. `validate_startup_secrets()` — exits in production if `JWT_SECRET_KEY` is missing/placeholder.
 2. `init_db()` — creates tables; **must import `User` from `app.auth.models`** before `Base.metadata.create_all()`.
 3. `init_redis()` — Redis connection pool; non-fatal if Redis is unavailable.
 4. `init_weather_provider()` — WeatherAPI HTTP client; non-fatal.
-5. `RollingWindowBuffer`, `EventBus`, `DriftMonitor`, `CalibrationService` — supporting services initialised in sequence; each non-fatal.
+5. `RollingWindowBuffer` (4.5), `EventBus` (4.6), `DriftMonitor` (4.7), `CalibrationService` (4.8) — supporting services initialised in sequence; each non-fatal.
 6. `city_model_service.model_status()` — logs how many cities have trained models vs. untrained.
 7. `warm_up_tcn_buffers()` — seeds each city's TCN rolling window (seq_len=30) from the most-recent rows of the master CSV; non-fatal.
 8. `RuntimeHealthCollector.start()` — background health tick; non-fatal. Stopped on shutdown.
-9. Mounts routers in this order: `auth_router` → `api_router` (system/training/prediction/anomalies/risk_analytics) → `analytics_aliases.router` → `realtime_router` (`/ws/*`) → `city_router`. Conditional: `v2_router` (if `app/api/v2/router.py` importable) and `weather_router` (if `app/api/routes/weather.py` importable) are appended after `city_router`.
-10. CORS: if `CORS_ORIGINS` contains `*`, no credentials; otherwise specific origins **with** credentials.
-11. Static mount at `/static/*` from `frontend/web_dashboard/admin_dashboard/`; `/frontend` and `/dashboard` GET routes serve `index.html` as a SPA fallback.
-12. Global exception handler returns `{"error": detail, "status_code": code}`.
+
+**`create_app()` wiring** (`app/main.py`):
+- `_SecurityHeadersMiddleware` — injects `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Referrer-Policy`, and HTTPS-only `Strict-Transport-Security` on every response.
+- Rate limiter state + `RateLimitExceeded` handler attached to `app.state`.
+- CORS: if `CORS_ORIGINS` contains `*`, no credentials; otherwise specific origins **with** credentials.
+- Static mount at `/static/*` from `frontend/web_dashboard/admin_dashboard/` (legacy admin reference); `/frontend` and `/dashboard` GET routes serve its `index.html`.
+- HTTP + general exception handlers return `{"error": detail, "status_code": code}`.
+- Routers in order: `auth_router` → `api_router` → `analytics_aliases.router` → `realtime_router` (`/ws/*`) → `city_router`. Conditional: `v2_router` and `weather_router` appended after `city_router` if importable.
+- Legacy React citizen app mounted at `/citizen` (static, `html=True`) if `frontend/citizen_app/` exists.
+- Flutter built web mounted at `/flutter` (static, `html=True`) if `frontend/citizen_flutter_app/build/web/` exists. In Docker, nginx also serves the same build at the root (`/`).
 
 **Request flow:** Router → `Depends(get_current_user|require_role|require_admin)` → service layer (`city_model_service.predict_v2()` for city predictions; `anomaly_service` was decommissioned in v3.2) → Repository (DB) → `broadcast_service.emit_*` → ConnectionManager → all sockets in channel.
 
@@ -137,6 +145,7 @@ flutter test
 | GET | `/cities/{city}/alerts` | none | Recent anomaly alerts (last *n*, max 20) |
 | GET | `/cities/{city}/status` | none | Model status, input_dim, ae_threshold |
 | POST | `/cities/{city}/train` | **Admin** | Trigger city-specific training (background) |
+| POST | `/cities/refresh` | **Admin** | Rescan CSV + disk for new cities; rebuilds `CITY_REGISTRY` |
 
 #### Authentication (`app/core/security.py`, `app/auth/`, `app/api/deps.py`)
 
@@ -295,7 +304,7 @@ Single unified Flutter app — both the public Citizen interface and the Admin D
 
 **Data layer (`lib/repositories/`):**
 - `AuthRepository` — login/register/logout/refresh; stores access + refresh tokens in flutter_secure_storage.
-- `CityRepository` — city list, risk, forecast, alerts via `/api/v2/cities/*`.
+- `CityRepository` — city list/overview/alerts/status via v1 (`/cities/*`); forecast tries v2 (`/api/v2/cities/{slug}/forecast`) first then falls back to v1; risk has explicit `getCityRiskV2()` alongside the default v1 call.
 - `AdminRepository` — anomalies, training trigger, analytics via v2 + admin endpoints.
 
 **State management (`lib/shared/providers/app_provider.dart`):** Riverpod providers for auth state, selected city, theme prefs (dark mode, big text).
