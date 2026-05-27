@@ -3,3 +3,6 @@ testpaths    = ["tests"]
 asyncio_mode = "auto"
 log_cli      = true
 log_cli_level = "INFO"
+markers = [
+    "performance: latency-budget assertions; environment-sensitive, run in isolation for benchmarking",
+]
