@@ -428,3 +428,10 @@ class TestV1ForecastDeprecation:
         assert "Link" in r.headers
         assert "/api/v2/cities/islamabad/forecast" in r.headers["Link"]
         assert 'rel="successor-version"' in r.headers["Link"]
+
+
+class TestOverview:
+    def test_overview_has_live_weather_flag(self, client):
+        response = client.get("/api/v2/cities/overview")
+        assert response.status_code == 200
+        assert response.json()["live_weather"] is True
