@@ -42,3 +42,17 @@ async def emit_result(result: dict[str, Any]) -> None:
         await ACTIVE_BROADCASTER.broadcast("anomalies", result)
     except Exception as exc:
         logger.warning("emit_result broadcast failed: %s", exc)
+
+
+async def emit_health(payload: dict[str, Any]) -> None:
+    """Route health broadcasts through the control plane (health channel).
+
+    Replaces direct manager.broadcast('health', ...) calls so all channels
+    flow through ACTIVE_BROADCASTER and gain Redis fan-out automatically.
+    """
+    if ACTIVE_BROADCASTER is None:
+        return
+    try:
+        await ACTIVE_BROADCASTER.broadcast("health", payload)
+    except Exception as exc:
+        logger.warning("emit_health broadcast failed: %s", exc)

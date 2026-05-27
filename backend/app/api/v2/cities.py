@@ -145,21 +145,16 @@ async def predict_city(
         request_id  = request.headers.get("X-Request-ID"),
     )
 
-    # Background: publish event + persist to anomaly_records for analytics
-    background_tasks.add_task(_publish_event, result)
+    # Background: emit through control plane + persist to anomaly_records
+    background_tasks.add_task(_emit_result_bg, result)
     background_tasks.add_task(_persist_prediction, result, raw)
 
     return PredictionResponseV2(**result)
 
 
-async def _publish_event(result: Dict[str, Any]) -> None:
-    try:
-        from app.services.event_bus import get_event_bus
-        bus = get_event_bus()
-        if bus:
-            await bus.publish_prediction(result)
-    except Exception as exc:
-        logger.debug("Event publish failed: %s", exc)
+async def _emit_result_bg(result: Dict[str, Any]) -> None:
+    from app.runtime import system_runtime as runtime
+    await runtime.emit_result(result)
 
 
 async def _persist_prediction(result: Dict[str, Any], weather: Dict[str, Any]) -> None:

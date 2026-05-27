@@ -218,6 +218,12 @@ def _enrich_with_metadata(slug: str, base: Dict[str, Any]) -> Dict[str, Any]:
     return base
 
 
+# v2 risk_band → v1 risk_level (keeps response shape backward-compatible)
+_RISK_BAND_TO_LEVEL: Dict[str, str] = {
+    "Low": "Low", "Moderate": "Medium", "High": "High", "Severe": "Critical",
+}
+
+
 # ──────────────────────────────────────────────────────────
 #  Routes
 # ──────────────────────────────────────────────────────────
@@ -257,17 +263,18 @@ async def cities_overview():
         slug = city["slug"]
         if isinstance(features, Exception):
             features = _default_weather(slug)
-        pred = city_model_service.predict(city=city["name"], features=features)
+        pred = await city_model_service.predict_v2(city_slug=slug, raw_weather=features)
+        risk_level = _RISK_BAND_TO_LEVEL.get(pred.get("risk_band", "Low"), "Low")
         results.append({
             "city":         city["name"],
             "city_slug":    slug,
             "province":     city["province"],
             "lat":          city["lat"],
             "lon":          city["lon"],
-            "risk_level":   pred["risk_level"],
+            "risk_level":   risk_level,
             "hri_score":    pred["hri_score"],
-            "is_anomaly":   pred["is_anomaly"],
-            "scenario":     _risk_to_scenario(pred["risk_level"]),
+            "is_anomaly":   pred.get("is_alert", False),
+            "scenario":     _risk_to_scenario(risk_level),
             "rainfall_mh":  features.get("prcp", 0),
             "has_model":    city["has_model"],
             "source":       pred.get("source", "—"),
@@ -288,9 +295,12 @@ async def city_risk(city: str):
     falls back to climatological defaults. Pressure is always MSL."""
     slug = _validate_city(city)
     features = await _get_weather(slug)
-    pred = city_model_service.predict(city=_display_name(slug), features=features)
-    pred["scenario"] = _risk_to_scenario(pred["risk_level"])
-    pred["inputs"]   = {k: features.get(k) for k in ("prcp", "humidity", "pressure", "tmax", "tmin")}
+    pred = await city_model_service.predict_v2(city_slug=slug, raw_weather=features)
+    risk_level = _RISK_BAND_TO_LEVEL.get(pred.get("risk_band", "Low"), "Low")
+    pred["risk_level"] = risk_level
+    pred["is_anomaly"] = pred.get("is_alert", False)
+    pred["scenario"]   = _risk_to_scenario(risk_level)
+    pred["inputs"]     = {k: features.get(k) for k in ("prcp", "humidity", "pressure", "tmax", "tmin")}
     return _enrich_with_metadata(slug, pred)
 
 

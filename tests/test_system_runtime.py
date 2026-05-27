@@ -39,6 +39,18 @@ async def test_emit_result_noop_when_no_broadcaster():
     await runtime.emit_result({"is_alert": True, "hri_score": 90})
 
 
+async def test_emit_health_routes_to_health_channel():
+    mock = AsyncMock()
+    runtime.ACTIVE_BROADCASTER = mock
+    await runtime.emit_health({"status": "ok", "latency_ms": 12})
+    mock.broadcast.assert_called_once_with("health", {"status": "ok", "latency_ms": 12})
+
+
+async def test_emit_health_noop_when_no_broadcaster():
+    runtime.ACTIVE_BROADCASTER = None
+    await runtime.emit_health({"status": "ok"})
+
+
 def test_feature_flags_has_polling_enabled():
     assert "polling_enabled" in runtime.FEATURE_FLAGS
 

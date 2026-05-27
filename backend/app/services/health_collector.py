@@ -83,8 +83,8 @@ class RuntimeHealthCollector:
             try:
                 self._tick_inference_health()
                 snapshot = self._build_snapshot()
-                from app.services.broadcast_service import emit_health
-                await emit_health(snapshot.model_dump(mode="json"))
+                from app.runtime import system_runtime as runtime
+                await runtime.emit_health(snapshot.model_dump(mode="json"))
             except Exception:
                 logger.exception("Health collector inference tick failed")
             await asyncio.sleep(HealthCollectorConfig.HEALTH_TICK_INTERVAL_S)
