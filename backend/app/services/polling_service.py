@@ -101,7 +101,7 @@ class WeatherPollingService:
 
         return (
             abs(curr.get("prcp", 0) - prev.get("prcp", 0)) > prcp_delta
-            or abs(curr.get("pressure_mb", 1013) - prev.get("pressure_mb", 1013)) > pressure_delta
+            or abs(curr.get("pressure", 1013.0) - prev.get("pressure", 1013.0)) > pressure_delta
             or abs(curr.get("humidity", 60) - prev.get("humidity", 60)) > humidity_delta
         )
 
