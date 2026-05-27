@@ -2,10 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Architecture version:** v3.2.0 (`app/main.py`). The sections below describe the
-> **current codebase** — not v3.1. Key changes since v3.1: BahdanauAttention → TCN;
-> simple score blending → LightGBM FusionModel + IsotonicCalibrator; fixed 10 cities →
-> dynamic city discovery; new v2 API at `/api/v2/*`; WeatherAPI live provider added.
+> **Architecture version:** v3.3.0. Key changes since v3.2: runtime control plane (`runtime/system_runtime.py`, `runtime/bootstrap.py`); broadcaster abstraction (`realtime/broadcaster.py` — LocalBroadcaster active, RedisBroadcaster dormant); per-city two-tier alert thresholds from `cal_data.npz` PR curve (`services/alert_tier.py`); background weather polling (`services/polling_service.py`); live parallel weather fetch in `/cities/overview`; Alembic wired into bootstrap; feature display name mapping in SHAP drivers.
 
 ## Project Overview
 
@@ -382,7 +379,13 @@ Classes: `TestSystem` (root, health, model info, database statistics), `TestAnom
 - **SQLite ↔ PostgreSQL**: multi-worker prod requires PostgreSQL; SQLite has write races at `--workers > 1`. `run_server.py` warns when this combo is used.
 - **`require_admin` accepts both** JWT `role=ADMIN` and legacy `X-Admin-Token` header — keep both paths working.
 - **Flutter app uses Dio for HTTP, not browser fetch**: `ApiClient` (Dio-based) in `lib/core/network/api_client.dart` handles auth header injection, token refresh on 401, and `--dart-define=API_BASE` resolution. Don't add raw `http` package calls — go through `ApiClient` or the repository layer.
-- **WebSocket fan-out is per-worker**: today's deployment is single-worker. If you scale uvicorn, you'll need a Redis pub/sub bridge between `ConnectionManager` instances.
+- **WebSocket fan-out**: `LocalBroadcaster` (single-worker, wraps `ConnectionManager`) is active by default. `RedisBroadcaster` activates automatically when `WORKERS > 1` and Redis is available. Never call `ACTIVE_BROADCASTER.broadcast()` directly — always use `runtime.emit_result()`.
+- **Single event origin**: `app.runtime.system_runtime.emit_result()` is the **only** place that calls `ACTIVE_BROADCASTER.broadcast()`. All code paths — HTTP endpoints, polling, background tasks — must funnel through this function. Violating this breaks event traceability and transport swapability.
+- **`predict_v2` output includes additive v3.3 fields**: `alert_tier_label` ("NORMAL" | "ADVISORY" | "ALERT"), `push_notification` (bool). Backward-compat fields (`is_alert`, `alert_tier` 1–5, `risk_band`) are preserved alongside them.
+- **Alert tier thresholds are dataset-derived**: `AlertTierClassifier.from_cal_data(cal_data.npz)` derives advisory (recall≥85%) and alert (precision≥65%) thresholds from the PR curve at model-load time. Advisory is recall-oriented (catch the event); alert is precision-oriented (push-notification quality). Never hardcode these thresholds.
+- **Polling persistence rule**: `WeatherPollingService` only writes to DB for ADVISORY/ALERT tier results. NORMAL readings are not persisted — prevents analytics charts from drowning in calm-weather noise.
+- **Platform framing is non-negotiable**: HydroGuard-AI produces **calibrated probabilistic risk estimates** from live Weather API data. It is observational, not a physical hydrological simulator. `ALERT` tier means elevated probability of hazardous conditions based on learned patterns — not guaranteed flood occurrence or an evacuation order. Never remove this framing.
+- **Inference consistency**: `polling`, `cities_overview`, and direct predict endpoints all route through `city_model_service.predict_v2()`. No parallel inference stacks. If you add a new code path that produces risk output, it must call `predict_v2`, not reimplement inference logic inline.
 - **City model loading is thread-safe via per-slug RLock** — concurrent first-touch predictions race on the same lock and only one filesystem load happens per city.
 - **CORS with `*`**: when `CORS_ORIGINS` contains `*`, FastAPI cannot allow credentials. The dashboard's auth flow requires specific origins (with credentials) in production.
 - **TCN is custom** — `app/ml/models/tcn.py` implements `CausalTCN`. When loading TCN models, `CityHybridModel.load()` handles all custom object registration automatically.
