@@ -37,6 +37,11 @@ class AlertTierClassifier:
         advisory_threshold: float = DEFAULT_ADVISORY_THRESHOLD,
         alert_threshold: float = DEFAULT_ALERT_THRESHOLD,
     ) -> None:
+        if advisory_threshold >= alert_threshold:
+            raise ValueError(
+                f"advisory_threshold ({advisory_threshold}) must be less than "
+                f"alert_threshold ({alert_threshold})"
+            )
         self.advisory_threshold = advisory_threshold
         self.alert_threshold = alert_threshold
 
@@ -69,12 +74,12 @@ class AlertTierClassifier:
             alert_mask = prec_t >= alert_precision_target
 
             advisory_threshold = (
-                float(thresh[advisory_mask].max())
+                float(thresh[advisory_mask].min())   # lowest threshold still achieving target recall
                 if advisory_mask.any()
                 else DEFAULT_ADVISORY_THRESHOLD
             )
             alert_threshold = (
-                float(thresh[alert_mask].min())
+                float(thresh[alert_mask].max())      # highest threshold still meeting precision target
                 if alert_mask.any()
                 else DEFAULT_ALERT_THRESHOLD
             )
