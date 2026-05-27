@@ -298,15 +298,15 @@ class CityModelService:
     # Each tier includes the minimum recommended action for civil authorities.
     _ALERT_TIERS: Dict[str, Any] = {
         "clear":      {"min": 0.00, "max": 0.25, "level": 0, "label": "All Clear",
-                       "color": "green",  "action": "Normal conditions. Monitor routine forecasts."},
+                       "color": "green",  "action": "Normal conditions. No elevated risk indicated."},
         "watch":      {"min": 0.25, "max": 0.40, "level": 1, "label": "Flood Watch",
-                       "color": "yellow", "action": "Elevated risk. Review emergency contacts. Avoid flood-prone areas."},
+                       "color": "yellow", "action": "Elevated risk indicated. Stay informed and review your local emergency contacts."},
         "warning":    {"min": 0.40, "max": 0.60, "level": 2, "label": "Flood Warning",
-                       "color": "orange", "action": "High risk. Move valuables to upper floors. Prepare evacuation route."},
+                       "color": "orange", "action": "High risk indicated. Take precautionary measures and monitor official emergency service guidance."},
         "emergency":  {"min": 0.60, "max": 0.80, "level": 3, "label": "Emergency Alert",
-                       "color": "red",    "action": "Imminent danger. Begin evacuation. Contact rescue services."},
-        "evacuation": {"min": 0.80, "max": 1.01, "level": 4, "label": "Evacuate Now",
-                       "color": "purple", "action": "CRITICAL. Evacuate immediately. Call Rescue 1122."},
+                       "color": "red",    "action": "Very high risk indicated. Follow guidance from official emergency authorities (NDMA / Rescue 1122)."},
+        "evacuation": {"min": 0.80, "max": 1.01, "level": 4, "label": "Extreme Risk",
+                       "color": "purple", "action": "Extreme risk indicated. Follow all instructions from official emergency authorities immediately."},
     }
 
     @classmethod

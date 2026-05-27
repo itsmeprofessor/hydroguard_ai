@@ -29,7 +29,7 @@ from app.realtime import realtime_router
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
 
-APP_VERSION = "3.2.0"
+APP_VERSION = "3.3.0"
 APP_TITLE   = "HydroGuard-AI — Adaptive Flood Intelligence API"
 
 
