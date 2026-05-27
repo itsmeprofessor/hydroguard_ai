@@ -35,7 +35,7 @@ async def emit_result(result: dict[str, Any]) -> None:
     """
     if ACTIVE_BROADCASTER is None:
         return
-    hri = result.get("hri_score") or 0
+    hri = result.get("hri_score") or 0  # None and 0 both map to 0; both below threshold
     if not result.get("is_alert") and hri < 40:
         return  # skip low-noise NORMAL readings
     try:
