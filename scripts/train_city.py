@@ -547,8 +547,9 @@ def train_one_city(
     if fusion.is_fitted and mask_cal.sum() >= 20:
         p_raw_cal   = fusion.predict_proba(X_cal_fus[mask_cal])
         cal_metrics = cal_obj.fit(p_raw_cal, y_cal[mask_cal])
+        p_calib_cal = cal_obj.transform(p_raw_cal)   # calibrated — same domain as predict_v2
         np.savez(tmp_dir / "cal_data.npz",
-                 y_true=y_cal[mask_cal], y_score=p_raw_cal)
+                 y_true=y_cal[mask_cal], y_score=p_calib_cal)
         logger.info("[%s] Calibrator fitted on CAL: Brier %.4f->%.4f",
                     slug, cal_metrics.brier_before, cal_metrics.brier_after)
 

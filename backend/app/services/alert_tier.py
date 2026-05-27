@@ -78,11 +78,24 @@ class AlertTierClassifier:
                 if advisory_mask.any()
                 else DEFAULT_ADVISORY_THRESHOLD
             )
+            if not advisory_mask.any():
+                logger.warning(
+                    "cal_data at %s: recall never reaches %.0f%% — using default advisory threshold %.3f",
+                    cal_data_path, advisory_recall_target * 100, DEFAULT_ADVISORY_THRESHOLD,
+                )
+
             alert_threshold = (
                 float(thresh[alert_mask].max())      # highest threshold still meeting precision target
                 if alert_mask.any()
                 else DEFAULT_ALERT_THRESHOLD
             )
+            if not alert_mask.any():
+                logger.warning(
+                    "cal_data at %s: precision never reaches %.0f%% (max p_score=%.4f) — "
+                    "using default alert threshold %.3f; city model may lack discriminative power",
+                    cal_data_path, alert_precision_target * 100, float(y_score.max()),
+                    DEFAULT_ALERT_THRESHOLD,
+                )
 
             if advisory_threshold >= alert_threshold:
                 logger.warning(
