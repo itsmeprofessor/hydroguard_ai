@@ -35,6 +35,7 @@ from uuid import uuid4
 import numpy as np
 
 from app.core.config import DATA_DIR, MODELS_DIR, MCInferenceConfig, HealthCollectorConfig
+from app.config.feature_display import display_name as _display_feature_name
 from app.ml.models.city_hybrid import CityHybridModel
 from app.ml.models.tcn import TCN_SEQ_LEN
 SEQUENCE_LENGTH = TCN_SEQ_LEN  # 30 — keep backward-compat name
@@ -343,6 +344,7 @@ class CityModelService:
         self._calibrators:     Dict[str, Any]   = {}   # slug -> IsotonicCalibrator
         self._ood_detectors:   Dict[str, Any]   = {}   # slug -> OODDetector
         self._city_thresholds: Dict[str, float] = {}   # slug -> optimal alert threshold (from metrics)
+        self._alert_tiers:     Dict[str, Any]   = {}   # slug -> AlertTierClassifier
         # Initial discovery — also calls _load_city_thresholds()
         self.refresh_registry()
 
@@ -566,6 +568,14 @@ class CityModelService:
                 logger.info("[%s] OODDetector loaded", slug)
         except Exception as exc:
             logger.debug("[%s] OODDetector load failed: %s", slug, exc)
+
+        try:
+            from app.services.alert_tier import AlertTierClassifier
+            cal_data_path = model_dir / "cal_data.npz"
+            self._alert_tiers[slug] = AlertTierClassifier.from_cal_data(cal_data_path)
+            logger.info("[%s] AlertTierClassifier loaded", slug)
+        except Exception as exc:
+            logger.debug("[%s] AlertTierClassifier load skipped: %s", slug, exc)
 
     def _load_preprocessor(self, slug: str) -> Optional[Any]:
         """Load the city-specific fitted preprocessor.
@@ -933,7 +943,7 @@ class CityModelService:
                     _branch = {"ae_percentile": ae_pct, "tcn_percentile": tcn_pct,
                                 "ae_variance": ae_var, "tcn_variance": tcn_var}
                     drivers = [
-                        {"feature": k, "shap": v,
+                        {"feature": _display_feature_name(k), "shap": v,
                          "value": float(_branch.get(k) if k in _branch else (feat_dict.get(k, 0.0) or 0.0))}
                         for k, v in shap_dict.items()
                     ]
@@ -950,6 +960,16 @@ class CityModelService:
         is_alert    = p_calib >= alert_threshold
         hri_score   = {"Low": 12, "Moderate": 40, "High": 68, "Severe": 88, "Evac": 95}.get(risk_band, 12)
         alert_tier  = self._compute_alert_tier(p_calib, alert_threshold)
+
+        # Two-tier alert semantics — additive fields, backward compat preserved
+        _clf = self._alert_tiers.get(slug)
+        if _clf is not None:
+            _tier = _clf.classify(p_calib)
+            alert_tier_label = _tier.tier
+            push_notification = _tier.push_notification
+        else:
+            alert_tier_label = "ALERT" if is_alert else "NORMAL"
+            push_notification = is_alert
 
         # ---- Alert log (reuse existing mechanism) ----
         if is_alert:
@@ -976,6 +996,8 @@ class CityModelService:
             "is_alert":            is_alert,
             "alert_threshold":     round(alert_threshold, 4),
             "alert_tier":          alert_tier,
+            "alert_tier_label":    alert_tier_label,
+            "push_notification":   push_notification,
             "component_scores":    {
                 "ae_percentile":  round(ae_pct,  4),
                 "tcn_percentile": round(tcn_pct, 4),
