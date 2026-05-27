@@ -965,11 +965,17 @@ class CityModelService:
         _clf = self._alert_tiers.get(slug)
         if _clf is not None:
             _tier = _clf.classify(p_calib)
-            alert_tier_label = _tier.tier
-            push_notification = _tier.push_notification
+            alert_tier_label       = _tier.tier
+            push_notification      = _tier.push_notification
+            advisory_tier_threshold = _clf.advisory_threshold
+            alert_tier_threshold    = _clf.alert_threshold
+            threshold_source        = _clf.source
         else:
-            alert_tier_label = "ALERT" if is_alert else "NORMAL"
-            push_notification = is_alert
+            alert_tier_label       = "ALERT" if is_alert else "NORMAL"
+            push_notification      = is_alert
+            advisory_tier_threshold = None
+            alert_tier_threshold    = None
+            threshold_source        = "no_classifier"
 
         # ---- Alert log (reuse existing mechanism) ----
         if is_alert:
@@ -995,9 +1001,12 @@ class CityModelService:
             "hri_score":           hri_score,
             "is_alert":            is_alert,
             "alert_threshold":     round(alert_threshold, 4),
-            "alert_tier":          alert_tier,
-            "alert_tier_label":    alert_tier_label,
-            "push_notification":   push_notification,
+            "alert_tier":           alert_tier,
+            "alert_tier_label":     alert_tier_label,
+            "push_notification":    push_notification,
+            "advisory_tier_threshold": round(advisory_tier_threshold, 4) if advisory_tier_threshold is not None else None,
+            "alert_tier_threshold": round(alert_tier_threshold, 4) if alert_tier_threshold is not None else None,
+            "threshold_source":     threshold_source,
             "component_scores":    {
                 "ae_percentile":  round(ae_pct,  4),
                 "tcn_percentile": round(tcn_pct, 4),

@@ -36,6 +36,8 @@ class AlertTierClassifier:
         self,
         advisory_threshold: float = DEFAULT_ADVISORY_THRESHOLD,
         alert_threshold: float = DEFAULT_ALERT_THRESHOLD,
+        *,
+        source: str = "default",
     ) -> None:
         if advisory_threshold >= alert_threshold:
             raise ValueError(
@@ -44,6 +46,7 @@ class AlertTierClassifier:
             )
         self.advisory_threshold = advisory_threshold
         self.alert_threshold = alert_threshold
+        self.source = source   # audit provenance: "derived" | "default_*"
 
     @classmethod
     def from_cal_data(
@@ -73,23 +76,25 @@ class AlertTierClassifier:
             advisory_mask = rec_t >= advisory_recall_target
             alert_mask = prec_t >= alert_precision_target
 
+            advisory_derived = advisory_mask.any()
             advisory_threshold = (
                 float(thresh[advisory_mask].min())   # lowest threshold still achieving target recall
-                if advisory_mask.any()
+                if advisory_derived
                 else DEFAULT_ADVISORY_THRESHOLD
             )
-            if not advisory_mask.any():
+            if not advisory_derived:
                 logger.warning(
                     "cal_data at %s: recall never reaches %.0f%% — using default advisory threshold %.3f",
                     cal_data_path, advisory_recall_target * 100, DEFAULT_ADVISORY_THRESHOLD,
                 )
 
+            alert_derived = alert_mask.any()
             alert_threshold = (
                 float(thresh[alert_mask].max())      # highest threshold still meeting precision target
-                if alert_mask.any()
+                if alert_derived
                 else DEFAULT_ALERT_THRESHOLD
             )
-            if not alert_mask.any():
+            if not alert_derived:
                 logger.warning(
                     "cal_data at %s: precision never reaches %.0f%% (max p_score=%.4f) — "
                     "using default alert threshold %.3f; city model may lack discriminative power",
@@ -105,15 +110,23 @@ class AlertTierClassifier:
                     advisory_threshold,
                     alert_threshold,
                 )
-                return cls()
+                return cls(source="default_inversion_guard")
+
+            # Determine provenance label for the audit trail
+            if advisory_derived and alert_derived:
+                src = "derived"
+            elif not advisory_derived and not alert_derived:
+                src = "default_both_unreachable"
+            elif not advisory_derived:
+                src = "default_advisory_recall_unreachable"
+            else:
+                src = "default_alert_precision_unreachable"
 
             logger.info(
-                "AlertTierClassifier derived from %s: advisory=%.3f alert=%.3f",
-                cal_data_path,
-                advisory_threshold,
-                alert_threshold,
+                "AlertTierClassifier derived from %s: advisory=%.3f alert=%.3f source=%s",
+                cal_data_path, advisory_threshold, alert_threshold, src,
             )
-            return cls(advisory_threshold, alert_threshold)
+            return cls(advisory_threshold, alert_threshold, source=src)
 
         except Exception as exc:
             logger.warning(
@@ -121,7 +134,7 @@ class AlertTierClassifier:
                 cal_data_path,
                 exc,
             )
-            return cls()
+            return cls(source="default_load_error")
 
     def classify(self, event_probability: float) -> AlertTierResult:
         if event_probability >= self.alert_threshold:

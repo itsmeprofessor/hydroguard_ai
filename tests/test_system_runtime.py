@@ -15,8 +15,9 @@ def reset_broadcaster():
 async def test_emit_result_calls_broadcaster_for_is_alert():
     mock = AsyncMock()
     runtime.ACTIVE_BROADCASTER = mock
-    await runtime.emit_result({"is_alert": True, "hri_score": 75})
-    mock.broadcast.assert_called_once_with("anomalies", {"is_alert": True, "hri_score": 75})
+    payload = {"is_alert": True, "hri_score": 75}
+    await runtime.emit_result(payload, origin="test")
+    mock.broadcast.assert_called_once_with("anomalies", payload)
 
 
 async def test_emit_result_calls_broadcaster_for_high_hri():
@@ -49,6 +50,10 @@ async def test_emit_health_routes_to_health_channel():
 async def test_emit_health_noop_when_no_broadcaster():
     runtime.ACTIVE_BROADCASTER = None
     await runtime.emit_health({"status": "ok"})
+
+
+def test_schema_version_constant_present():
+    assert runtime.EMIT_EVENT_SCHEMA_VERSION == "1.0"
 
 
 def test_feature_flags_has_polling_enabled():

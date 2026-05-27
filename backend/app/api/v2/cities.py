@@ -154,7 +154,7 @@ async def predict_city(
 
 async def _emit_result_bg(result: Dict[str, Any]) -> None:
     from app.runtime import system_runtime as runtime
-    await runtime.emit_result(result)
+    await runtime.emit_result(result, origin="v2_predict")
 
 
 async def _persist_prediction(result: Dict[str, Any], weather: Dict[str, Any]) -> None:

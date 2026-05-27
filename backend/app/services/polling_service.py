@@ -71,7 +71,7 @@ class WeatherPollingService:
         result = await self._models.predict_v2(slug, raw)
 
         from app.runtime import system_runtime as runtime
-        await runtime.emit_result(result)
+        await runtime.emit_result(result, origin="polling")
 
         if result.get("alert_tier_label") != "NORMAL":
             asyncio.create_task(
