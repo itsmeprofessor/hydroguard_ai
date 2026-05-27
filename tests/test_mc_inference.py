@@ -305,8 +305,15 @@ async def test_concurrent_cities():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
+@pytest.mark.performance
 async def test_latency_within_budget(mc_cfg):
-    """Wall-clock predict_v2() latency must be under INFERENCE_TIMEOUT_MS * 1.5."""
+    """Wall-clock predict_v2() latency must be under INFERENCE_TIMEOUT_MS * 1.5.
+
+    NOTE: This is a performance-budget assertion, not a correctness test. It is
+    environment-sensitive (thermal throttle, CPU scheduling, GC, suite-load) and
+    may flap under prolonged full-suite runs. Run in isolation when benchmarking:
+        pytest tests/test_mc_inference.py::test_latency_within_budget -v
+    """
     from app.services.city_model_service import city_model_service
 
     budget_ms = mc_cfg.INFERENCE_TIMEOUT_MS * 1.5
