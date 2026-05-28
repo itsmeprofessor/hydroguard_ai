@@ -93,36 +93,50 @@ class WeatherSnapshot:
     daily_chance_rain: Optional[int] = None
 
     def to_feature_dict(self) -> dict[str, Any]:
-        """Map WeatherAPI fields → HydroGuard feature names for inference."""
-        temp = self.temp_c
+        """Map WeatherAPI fields → HydroGuard feature names for inference.
+
+        For current-weather snapshots (no forecast day), max_temp_c and
+        min_temp_c are None. We use temp_c as the best available estimate
+        rather than falling back to generic 25/20 defaults, so the feature
+        values reflect the actual observed temperature.
+        """
+        temp = self.temp_c or 22.5
+        tmax = self.max_temp_c if self.max_temp_c is not None else temp
+        tmin = self.min_temp_c if self.min_temp_c is not None else temp
         return {
-            "prcp":        self.precip_mm        or 0.0,
-            "humidity":    self.humidity          or 50.0,
-            "pressure":    self.pressure_mb       or 1013.0,
-            "cloud_cover": self.cloud             or 0.0,
-            "tmax":        self.max_temp_c or temp or 25.0,
-            "tmin":        self.min_temp_c or temp or 20.0,
-            "tavg":        temp                   or 22.5,
-            "dew_point":   self.dew_point_c       or 10.0,
-            "wspd":        self.wind_kph          or 0.0,
-            "temp_range":  ((self.max_temp_c or temp or 25.0)
-                           - (self.min_temp_c or temp or 20.0)),
+            "prcp":        self.precip_mm  if self.precip_mm  is not None else 0.0,
+            "humidity":    self.humidity   if self.humidity    is not None else 50.0,
+            "pressure":    self.pressure_mb if self.pressure_mb is not None else 1013.0,
+            "cloud_cover": self.cloud      if self.cloud       is not None else 0.0,
+            "tmax":        tmax,
+            "tmin":        tmin,
+            "tavg":        temp,
+            "dew_point":   self.dew_point_c if self.dew_point_c is not None else 10.0,
+            "wspd":        self.wind_kph   if self.wind_kph    is not None else 0.0,
+            "temp_range":  max(tmax - tmin, 0.0),
         }
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "city_slug":    self.city_slug,
-            "fetched_at":   self.fetched_at.isoformat(),
-            "provider":     self.provider,
-            "temp_c":       self.temp_c,
-            "feelslike_c":  self.feelslike_c,
-            "humidity":     self.humidity,
-            "pressure_mb":  self.pressure_mb,
-            "precip_mm":    self.precip_mm,
-            "cloud":        self.cloud,
-            "wind_kph":     self.wind_kph,
-            "dew_point_c":  self.dew_point_c,
-            "condition_code": self.condition_code,
+            "city_slug":        self.city_slug,
+            "fetched_at":       self.fetched_at.isoformat(),
+            "provider":         self.provider,
+            "temp_c":           self.temp_c,
+            "feelslike_c":      self.feelslike_c,
+            "humidity":         self.humidity,
+            "pressure_mb":      self.pressure_mb,
+            "precip_mm":        self.precip_mm,
+            "cloud":            self.cloud,
+            "wind_kph":         self.wind_kph,
+            "dew_point_c":      self.dew_point_c,
+            "condition_code":   self.condition_code,
+            # Forecast fields — must persist through Redis cache so
+            # to_feature_dict() always gets real daily max/min, not current temp.
+            "max_temp_c":       self.max_temp_c,
+            "min_temp_c":       self.min_temp_c,
+            "daily_precip_mm":  self.daily_precip_mm,
+            "daily_chance_rain":self.daily_chance_rain,
+            "forecast_date":    self.forecast_date,
         }
 
     @classmethod
@@ -245,7 +259,14 @@ class WeatherAPIProvider:
     # ── Public API ──────────────────────────────────────────
 
     async def get_current(self, city: str, force_refresh: bool = False) -> WeatherSnapshot:
-        """Fetch current conditions. Raises HydroGuardWeatherError on failure."""
+        """Fetch current conditions + today's forecast max/min.
+
+        Uses forecast.json?days=1 instead of current.json so we get:
+        - Live current conditions (temp, humidity, pressure, etc.)
+        - Today's actual daily max_temp_c and min_temp_c for the ML model
+
+        Cache: Redis key hg:weather:current:{slug}, TTL=WEATHER_CACHE_TTL.
+        """
         slug = _slug(city)
 
         if not force_refresh:
@@ -254,18 +275,48 @@ class WeatherAPIProvider:
                 self.cache_hit_count += 1
                 return WeatherSnapshot.from_dict(cached)
 
+        # forecast.json?days=1 returns both current conditions AND today's
+        # forecast day (with maxtemp_c / mintemp_c) in one API call.
         data = await self._request(
-            "/current.json",
-            params={"q": _city_query(city), "aqi": "no"},
+            "/forecast.json",
+            params={"q": _city_query(city), "days": 1, "aqi": "no", "alerts": "no"},
             city=city,
         )
-        snap = self._parse_current(data, slug)
+        snap = self._parse_current_with_forecast(data, slug)
         await self._cache_set(
             f"hg:weather:current:{slug}",
             snap.to_dict(),
             ttl=WEATHER_CACHE_TTL,
         )
         return snap
+
+    def _parse_current_with_forecast(self, data: dict, slug: str) -> WeatherSnapshot:
+        """Parse forecast.json response: current conditions + today's max/min."""
+        cur = data.get("current", {})
+        if not cur:
+            raise WeatherAPISchemaError(slug, "current")
+        # Today's forecast day gives real daily max/min temperatures
+        today = (data.get("forecast", {})
+                     .get("forecastday", [{}])[0]
+                     .get("day", {}))
+        return WeatherSnapshot(
+            city_slug      = slug,
+            fetched_at     = datetime.now(timezone.utc),
+            temp_c         = cur.get("temp_c"),
+            feelslike_c    = cur.get("feelslike_c"),
+            humidity       = cur.get("humidity"),
+            pressure_mb    = cur.get("pressure_mb"),
+            precip_mm      = cur.get("precip_mm"),
+            cloud          = cur.get("cloud"),
+            wind_kph       = cur.get("wind_kph"),
+            dew_point_c    = cur.get("dewpoint_c"),
+            vis_km         = cur.get("vis_km"),
+            uv_index       = cur.get("uv"),
+            condition_code = cur.get("condition", {}).get("code"),
+            # Today's actual daily max/min from forecast — real values
+            max_temp_c     = today.get("maxtemp_c"),
+            min_temp_c     = today.get("mintemp_c"),
+        )
 
     async def get_current_for_all_cities(
         self, slugs: list[str]

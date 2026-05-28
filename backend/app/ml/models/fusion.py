@@ -510,23 +510,27 @@ class FusionModel:
     # ── SHAP explainability ───────────────────────────────────────
 
     def shap_values(self, features: Dict[str, float]) -> Dict[str, float]:
-        """Top-8 SHAP values via TreeExplainer. Empty dict on failure."""
+        """Top-8 SHAP values using LightGBM native pred_contrib (no external shap package)."""
         if not self._is_fitted or self._model is None:
             return {}
         try:
-            import shap, pandas as pd
+            import pandas as pd
             row  = {f: float(features.get(f, 0.0) or 0.0) for f in self._feature_names}
             X_df = pd.DataFrame([row], columns=self._feature_names)
-            explainer = shap.TreeExplainer(self._model)
-            sv = explainer.shap_values(X_df)
-            if isinstance(sv, list):
-                sv = sv[1]
-            sv    = np.asarray(sv).ravel()
-            order = np.argsort(-np.abs(sv))[:8]
+            # Use the native booster API — more reliable than the sklearn wrapper for pred_contrib.
+            # pred_contrib returns (N, n_features + 1); last column = expected value baseline.
+            contrib = self._model.booster_.predict(X_df.values, pred_contrib=True)
+            sv      = np.asarray(contrib).ravel()[:-1]   # drop expected-value column
+            order   = np.argsort(-np.abs(sv))[:8]
             return {self._feature_names[i]: round(float(sv[i]), 4) for i in order}
         except Exception as exc:
-            logger.debug("shap_values failed: %s", exc)
-            return {}
+            logger.warning("shap_values (LGB native) failed: %s — using gain importance", exc)
+            try:
+                imp = self.feature_importance()
+                top = sorted(imp.items(), key=lambda x: -abs(x[1]))[:8]
+                return {k: round(v, 4) for k, v in top}
+            except Exception:
+                return {}
 
     def feature_importance(self) -> Dict[str, float]:
         """LightGBM gain-based feature importance."""
@@ -561,8 +565,10 @@ class FusionModel:
     def _assert_fitted(self) -> None:
         if not self._is_fitted or self._model is None:
             raise RuntimeError("FusionModel not trained. Call train() first.")
-        if self._schema is None:
-            raise RuntimeError("Feature schema missing. Re-train or reload model.")
+        # Models saved before v3.4 schema validation won't have _schema in __dict__.
+        # Reconstruct it from _feature_names so old pkl files work without retraining.
+        if not hasattr(self, "_schema") or self._schema is None:
+            self._schema = FeatureSchema(feature_names=list(self._feature_names))
 
     # ── Properties ────────────────────────────────────────────────
 

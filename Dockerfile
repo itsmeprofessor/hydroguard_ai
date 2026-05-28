@@ -20,7 +20,12 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # ── Stage 2: runtime image ───────────────────────────────────
 FROM python:3.11-slim AS runtime
 
-# No curl — healthcheck uses Python's built-in urllib (saves ~5 MB)
+# libgomp1 is required by LightGBM (OpenMP threading).
+# python:3.11-slim omits it; without it all lgbm_model.pkl files fail to load.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy installed Python packages from builder

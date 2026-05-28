@@ -140,7 +140,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
-      - ./frontend/web_dashboard/admin_dashboard:/usr/share/nginx/html:ro
+      - ./frontend/citizen_flutter_app/build/web:/usr/share/nginx/html:ro
     depends_on:
       hydroguard-api:
         condition: service_healthy

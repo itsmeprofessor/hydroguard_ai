@@ -105,15 +105,18 @@ async def get_anomaly_statistics(
                 q = q.filter(AnomalyRecord.date <= end_date)
             filtered_count = q.scalar() or 0
 
-            # by_month aggregate
-            by_month_rows = (
-                db.query(func.strftime("%m", AnomalyRecord.date),
-                         func.count(AnomalyRecord.id))
-                  .filter(AnomalyRecord.is_anomaly == True)  # noqa: E712
-                  .group_by(func.strftime("%m", AnomalyRecord.date))
-                  .all()
-            )
-            by_month = {m: c for m, c in by_month_rows if m}
+            # by_month aggregate — extract() works on both PostgreSQL and SQLite
+            try:
+                month_col = func.extract("month", AnomalyRecord.date)
+                by_month_rows = (
+                    db.query(month_col, func.count(AnomalyRecord.id))
+                      .filter(AnomalyRecord.is_anomaly == True)  # noqa: E712
+                      .group_by(month_col)
+                      .all()
+                )
+                by_month = {str(int(m)): c for m, c in by_month_rows if m is not None}
+            except Exception:
+                by_month = {}
 
             # date range in DB
             dmin = db.query(func.min(AnomalyRecord.date)).scalar()
