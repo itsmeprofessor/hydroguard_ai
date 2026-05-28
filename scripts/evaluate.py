@@ -1,116 +1,213 @@
 #!/usr/bin/env python3
 """
-HydroGuard-AI — Model Evaluation Script
+HydroGuard-AI -- Per-City Evaluation Report  v2.0
+=================================================
+Reads saved model artifacts and produces a complete metric report for every
+trained city.  Does NOT load TensorFlow or re-run training.
 
-Usage:
-    python scripts/evaluate.py
-    python scripts/evaluate.py --data backend/data/pakistan_weather_2000_2024.csv --output backend/evaluation_results
+Metric sources
+--------------
+  AUC / PR-AUC / ECE / Brier
+      Loaded from training_metrics.json (TEST split, unbiased).
+      Recomputed from test_data.npz / cal_data.npz if the JSON keys are absent.
+
+  Precision / Recall / F1
+      Computed from test_data.npz (unbiased TEST split) when present.
+      Falls back to cal_data.npz for existing models trained before v3.5.1
+      (mildly in-distribution for threshold; the calibrated domain is identical).
+
+  AlertTier thresholds
+      Always derived from cal_data.npz via AlertTierClassifier.from_cal_data().
+
+Operational semantics
+---------------------
+  ADVISORY  recall-priority:  threshold at recall >= 85%  -- in-app notification
+  ALERT     precision-priority: threshold at precision >= 65% -- push notification
+  Brier     probabilistic quality; lower = better; no threshold involved
+  F1        balance metric reported for academic completeness; not the primary
+            optimisation target of this architecture
+
+Usage
+-----
+  python scripts/evaluate.py
+  python scripts/evaluate.py --models-dir backend/saved_models/city_models
+  python scripts/evaluate.py --city islamabad
+  python scripts/evaluate.py --output backend/evaluation_results
 """
-
 from __future__ import annotations
 
 import argparse
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-
-BACKEND = Path(__file__).parents[1] / "backend"
+REPO_ROOT = Path(__file__).parents[1]
+BACKEND   = REPO_ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)-8s | %(message)s")
+# Stub dotenv so the app imports don't fail outside Docker
+import types as _t
+_dotenv = _t.ModuleType("dotenv"); _dotenv.load_dotenv = lambda *a, **k: None
+sys.modules.setdefault("dotenv", _dotenv)
+
+import os
+os.environ.setdefault("JWT_SECRET_KEY", "evaluate-script-key")
+
+logging.basicConfig(
+    level   = logging.INFO,
+    format  = "%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt = "%H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
 
+# ── Formatting helpers ────────────────────────────────────────────────────────
+
+def _f(v, fmt=".4f") -> str:
+    if v is None:
+        return "N/A"
+    try:
+        return format(float(v), fmt)
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+def _banner(title: str, width: int = 100) -> None:
+    print("\n" + "=" * width)
+    print(f"  {title}")
+    print("=" * width)
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate trained anomaly detection model")
-    parser.add_argument("--data",   "-d", type=str, default=str(BACKEND / "data/pakistan_weather_2000_2024.csv"))
-    parser.add_argument("--output", "-o", type=str, default=str(BACKEND / "evaluation_results"))
+    parser = argparse.ArgumentParser(
+        description="HydroGuard-AI per-city evaluation report"
+    )
+    parser.add_argument(
+        "--models-dir", "-m",
+        default=str(BACKEND / "saved_models/city_models"),
+        help="Directory containing per-city model subdirectories",
+    )
+    parser.add_argument(
+        "--city", "-c",
+        default=None,
+        help="Evaluate a single city only (e.g. islamabad)",
+    )
+    parser.add_argument(
+        "--output", "-o",
+        default=None,
+        help="Directory to write evaluation_report.json (default: models-dir parent)",
+    )
     args = parser.parse_args()
 
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    from app.services.anomaly_service import anomaly_service
-    from utils.preprocessing import load_and_prepare_data
-
-    if not anomaly_service.is_trained:
-        logger.error("Model not trained. Run: python scripts/train.py --data <csv>")
+    models_dir = Path(args.models_dir)
+    if not models_dir.exists():
+        logger.error("models-dir not found: %s", models_dir)
         sys.exit(1)
 
-    logger.info(f"Loading data from {args.data}")
-    df = load_and_prepare_data(args.data)
-    X, df_processed = anomaly_service.preprocessor.transform(df)
+    from app.ml.evaluation.city_metrics import CityEvaluator
 
-    logger.info("Running inference on full dataset...")
-    errors     = anomaly_service.autoencoder.get_reconstruction_error(X)
-    is_anomaly = errors > anomaly_service.autoencoder.threshold
-    risk_levels = [anomaly_service.autoencoder.get_risk_level(e) for e in errors]
+    evaluator = CityEvaluator()
 
-    df["reconstruction_error"] = errors
-    df["is_anomaly"]           = is_anomaly
-    df["risk_level"]           = risk_levels
+    # Discover city directories
+    if args.city:
+        candidates = [models_dir / args.city.lower()]
+    else:
+        candidates = sorted(
+            p for p in models_dir.iterdir()
+            if p.is_dir() and not p.name.endswith((".tmp", ".bak"))
+        )
 
-    # ── Basic stats ──────────────────────────────────────────
-    basic_stats = {
-        "total_samples":      int(len(df)),
-        "total_anomalies":    int(np.sum(is_anomaly)),
-        "anomaly_percentage": round(float(np.mean(is_anomaly) * 100), 2),
-        "threshold":          float(anomaly_service.autoencoder.threshold),
-        "mean_error":         float(np.mean(errors)),
-        "std_error":          float(np.std(errors)),
-        "min_error":          float(np.min(errors)),
-        "max_error":          float(np.max(errors)),
-        "median_error":       float(np.median(errors)),
+    reports = []
+    for city_dir in candidates:
+        if not city_dir.is_dir():
+            logger.warning("City directory not found: %s", city_dir)
+            continue
+        logger.info("Evaluating %s ...", city_dir.name)
+        report = evaluator.evaluate(city_dir)
+        if report is None:
+            logger.warning("[%s] Skipped -- missing artifacts", city_dir.name)
+            continue
+        reports.append(report)
+
+    if not reports:
+        logger.error("No cities could be evaluated.")
+        sys.exit(1)
+
+    # ── Print report ──────────────────────────────────────────────────────────
+    _banner("HydroGuard-AI v3.5  PER-CITY EVALUATION REPORT")
+
+    # Table 1: probabilistic metrics
+    print(f"\n  PROBABILISTIC METRICS  (threshold-free; evaluate calibrated probability quality)")
+    print(f"  {'City':<14} {'Split':<6} {'Rows':>6}  {'Pos%':>5}  "
+          f"{'AUC':>7}  {'PR-AUC':>7}  {'ECE':>7}  {'Brier':>7}")
+    print("  " + "-" * 80)
+    for r in reports:
+        print(
+            f"  {r.city_slug:<14} {r.eval_split:<6} {r.n_rows:>6}  "
+            f"{r.positive_rate*100:>4.1f}%  "
+            f"{_f(r.auc):>7}  {_f(r.pr_auc):>7}  "
+            f"{_f(r.ece):>7}  {_f(r.brier_score):>7}"
+        )
+
+    # Table 2: ADVISORY tier
+    print(f"\n  ADVISORY TIER  -- recall-priority  (threshold derived at recall >= 85%)")
+    print(f"  {'City':<14} {'Adv.Thr':>8}  {'Precision':>10}  {'Recall':>8}  "
+          f"{'F1':>8}  {'#Alerts':>8}  {'ThreshSrc'}")
+    print("  " + "-" * 88)
+    for r in reports:
+        adv = r.advisory
+        print(
+            f"  {r.city_slug:<14} {_f(adv.threshold):>8}  "
+            f"{_f(adv.precision):>10}  {_f(adv.recall):>8}  "
+            f"{_f(adv.f1):>8}  {adv.n_predicted_positive:>8}  "
+            f"{r.threshold_source}"
+        )
+
+    # Table 3: ALERT tier
+    print(f"\n  ALERT TIER  -- precision-priority  (threshold derived at precision >= 65%)")
+    print(f"  F1 is a balance metric reported for academic completeness -- "
+          f"not the primary optimisation target.")
+    print(f"  {'City':<14} {'Alrt.Thr':>8}  {'Precision':>10}  {'Recall':>8}  "
+          f"{'F1':>8}  {'#Alerts':>8}")
+    print("  " + "-" * 70)
+    for r in reports:
+        alrt = r.alert
+        print(
+            f"  {r.city_slug:<14} {_f(alrt.threshold):>8}  "
+            f"{_f(alrt.precision):>10}  {_f(alrt.recall):>8}  "
+            f"{_f(alrt.f1):>8}  {alrt.n_predicted_positive:>8}"
+        )
+
+    print("\n" + "=" * 100)
+    print("\n  KEY:")
+    print("  Split      = test  -> metrics from held-out TEST set (unbiased, preferred)")
+    print("               cal   -> metrics from CAL set (existing models; same calibrated domain)")
+    print("  AUC        = ROC area under curve on calibrated probabilities")
+    print("  PR-AUC     = Precision-Recall AUC (more informative for imbalanced classes)")
+    print("  ECE        = Expected Calibration Error (calibrator fitted on CAL, measured on TEST)")
+    print("  Brier      = Brier Score -- probabilistic quality; lower is better (0 = perfect)")
+    print("  Adv.Thr    = advisory threshold (lowest thr achieving recall >= 85%)")
+    print("  Alrt.Thr   = alert threshold (highest thr achieving precision >= 65%)")
+    print("  ThreshSrc  = derived (from PR curve) | default_* (fallback; see AlertTierClassifier)")
+    print("  F1         = balance metric; not used for threshold selection in this architecture\n")
+
+    # ── Serialize JSON report ─────────────────────────────────────────────────
+    output_dir = Path(args.output) if args.output else models_dir.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "evaluation_report.json"
+
+    json_payload = {
+        "generated_at":    datetime.now(timezone.utc).isoformat(),
+        "pipeline_version": "v3.5.1",
+        "models_dir":      str(models_dir),
+        "cities":          [r.to_dict() for r in reports],
     }
-    logger.info(f"Anomaly rate: {basic_stats['anomaly_percentage']:.2f}%  ({basic_stats['total_anomalies']}/{basic_stats['total_samples']})")
-
-    # ── By city ──────────────────────────────────────────────
-    city_analysis: dict = {}
-    if "city" in df.columns:
-        for city, group in df.groupby("city"):
-            mask = group["is_anomaly"]
-            city_analysis[city] = {
-                "total":    len(group),
-                "anomalies":int(mask.sum()),
-                "rate":     round(float(mask.mean() * 100), 2),
-                "mean_error": round(float(group["reconstruction_error"].mean()), 6),
-            }
-
-    # ── By risk level ────────────────────────────────────────
-    risk_dist = df[is_anomaly]["risk_level"].value_counts().to_dict()
-
-    # ── Monthly trend ────────────────────────────────────────
-    monthly: dict = {}
-    if "month" in df.columns:
-        for month, group in df.groupby("month"):
-            monthly[int(month)] = round(float(group["is_anomaly"].mean() * 100), 2)
-
-    # ── Export anomaly CSV ───────────────────────────────────
-    anomaly_df = df[is_anomaly].copy()
-    out_csv    = output_dir / "detected_anomalies.csv"
-    anomaly_df.to_csv(out_csv, index=False)
-
-    # ── Export JSON report ───────────────────────────────────
-    report = {
-        "timestamp":    datetime.now().isoformat(),
-        "data_file":    args.data,
-        "model_info":   anomaly_service.get_model_info(),
-        "basic_stats":  basic_stats,
-        "city_analysis": city_analysis,
-        "risk_distribution": risk_dist,
-        "monthly_anomaly_rate": monthly,
-    }
-    out_json = output_dir / "evaluation_report.json"
-    out_json.write_text(json.dumps(report, indent=2, default=str))
-
-    logger.info(f"Anomaly CSV   → {out_csv}")
-    logger.info(f"Eval report   → {out_json}")
-    logger.info("Evaluation complete.")
+    report_path.write_text(json.dumps(json_payload, indent=2, default=str))
+    logger.info("Evaluation report written -> %s", report_path)
 
 
 if __name__ == "__main__":

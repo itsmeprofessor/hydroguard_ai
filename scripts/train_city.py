@@ -559,6 +559,19 @@ def train_one_city(
                       for r in df_train.to_dict("records")], dtype=float)
     ood.fit(X_ood)
 
+    # ── 13b. Derive AlertTier operational thresholds from CAL data ────────────
+    # Thresholds are derived now (post cal_data.npz save) so TEST evaluation
+    # can report P/R/F1 in the same calibrated domain used at runtime.
+    from app.services.alert_tier import AlertTierClassifier as _ATC
+    _atc = _ATC.from_cal_data(tmp_dir / "cal_data.npz") if (tmp_dir / "cal_data.npz").exists() \
+           else _ATC()
+    _adv_thr  = _atc.advisory_threshold
+    _alrt_thr = _atc.alert_threshold
+    logger.info(
+        "[%s] AlertTier thresholds: advisory=%.4f  alert=%.4f  source=%s",
+        slug, _adv_thr, _alrt_thr, _atc.source,
+    )
+
     # ── 14. TEST evaluation — unbiased (neither Fusion nor Calibrator saw TEST)
     test_metrics: dict = {}
     logger.info("[%s] Evaluating TEST (%d rows) — primary unbiased metric...", slug, len(X_test))
@@ -574,6 +587,11 @@ def train_one_city(
             # Calibrator transforms TEST probabilities — it was NOT fitted on TEST
             p_cal_t = cal_obj.transform(p_raw_t) if cal_obj.is_fitted else p_raw_t
             y_tv    = y_test[mask_t]
+
+            # Save TEST calibrated probabilities for standalone evaluation
+            np.savez(tmp_dir / "test_data.npz", y_true=y_tv, y_score=p_cal_t)
+
+            # ── Neutral threshold (0.5): backward-compatible metrics ──────────
             y_bin_t = (p_cal_t >= 0.5).astype(int)
 
             def _s(fn, *a, **kw):
@@ -597,11 +615,26 @@ def train_one_city(
             gap = (round(lgbm_internal_auc - t_auc, 4)
                    if t_auc is not None and not np.isnan(lgbm_internal_auc) else None)
 
+            # ── Tier-aware metrics at operational AlertTier thresholds ─────────
+            # ADVISORY: recall-priority — classifies using advisory_threshold
+            y_bin_adv  = (p_cal_t >= _adv_thr).astype(int)
+            t_prec_adv = _s(precision_score, y_tv, y_bin_adv, zero_division=0)
+            t_rec_adv  = _s(recall_score,    y_tv, y_bin_adv, zero_division=0)
+            t_f1_adv   = _s(f1_score,        y_tv, y_bin_adv, zero_division=0)
+
+            # ALERT: precision-priority — classifies using alert_threshold
+            y_bin_alrt  = (p_cal_t >= _alrt_thr).astype(int)
+            t_prec_alrt = _s(precision_score, y_tv, y_bin_alrt, zero_division=0)
+            t_rec_alrt  = _s(recall_score,    y_tv, y_bin_alrt, zero_division=0)
+            t_f1_alrt   = _s(f1_score,        y_tv, y_bin_alrt, zero_division=0)
+
             test_metrics = {
+                # Probabilistic (threshold-free)
                 "test_auc":       round(t_auc,    4) if t_auc    is not None else None,
                 "test_pr_auc":    round(t_pr_auc, 4) if t_pr_auc is not None else None,
                 "test_brier":     round(t_brier,  4) if t_brier  is not None else None,
                 "test_ece":       round(t_ece,    4) if t_ece    is not None else None,
+                # Backward-compat: neutral 0.5 threshold
                 "test_f1":        round(t_f1,     4) if t_f1     is not None else None,
                 "test_precision": round(t_prec,   4) if t_prec   is not None else None,
                 "test_recall":    round(t_rec,    4) if t_rec    is not None else None,
@@ -610,11 +643,30 @@ def train_one_city(
                 "fusion_vs_test_gap": gap,
                 "gap_flag": ("HIGH" if gap is not None and abs(gap) > 0.15 else
                              "MODERATE" if gap is not None and abs(gap) > 0.08 else "LOW"),
+                # Operational thresholds (from AlertTierClassifier)
+                "alert_tier_advisory_threshold": round(_adv_thr, 4),
+                "alert_tier_alert_threshold":    round(_alrt_thr, 4),
+                "alert_tier_threshold_source":   _atc.source,
+                # ADVISORY tier (recall-priority)
+                "test_precision_advisory": round(t_prec_adv,  4) if t_prec_adv  is not None else None,
+                "test_recall_advisory":    round(t_rec_adv,   4) if t_rec_adv   is not None else None,
+                "test_f1_advisory":        round(t_f1_adv,    4) if t_f1_adv    is not None else None,
+                # ALERT tier (precision-priority)
+                "test_precision_alert":    round(t_prec_alrt, 4) if t_prec_alrt is not None else None,
+                "test_recall_alert":       round(t_rec_alrt,  4) if t_rec_alrt  is not None else None,
+                "test_f1_alert":           round(t_f1_alrt,   4) if t_f1_alrt   is not None else None,
             }
             logger.info(
-                "[%s] TEST: AUC=%.4f  PR-AUC=%.4f  ECE=%.4f  Brier=%.4f  F1=%.4f",
-                slug,
-                t_auc or 0, t_pr_auc or 0, t_ece or 0, t_brier or 0, t_f1 or 0,
+                "[%s] TEST probabilistic: AUC=%.4f  PR-AUC=%.4f  ECE=%.4f  Brier=%.4f",
+                slug, t_auc or 0, t_pr_auc or 0, t_ece or 0, t_brier or 0,
+            )
+            logger.info(
+                "[%s] TEST ADVISORY (thr=%.4f): Prec=%.4f  Rec=%.4f  F1=%.4f",
+                slug, _adv_thr, t_prec_adv or 0, t_rec_adv or 0, t_f1_adv or 0,
+            )
+            logger.info(
+                "[%s] TEST ALERT    (thr=%.4f): Prec=%.4f  Rec=%.4f  F1=%.4f",
+                slug, _alrt_thr, t_prec_alrt or 0, t_rec_alrt or 0, t_f1_alrt or 0,
             )
 
             # Gate on TEST AUC (the real metric)
@@ -826,22 +878,26 @@ def main() -> None:
             logger.error("[%s] FAILED: %s", slug, exc, exc_info=True)
             results.append({"city": slug, "status": "failed", "error": str(exc)})
 
-    print("\n" + "=" * 80)
+    print("\n" + "=" * 100)
     print("  HYDROGUARD-AI v3.5  AUDIT-CORRECTED TRAINING SUMMARY")
-    print("=" * 80)
-    print(f"  {'City':<12} {'Status':<10} {'FusionAUC':<11} {'TEST_AUC':<10} "
-          f"{'TEST_ECE':<10} {'h_AUC':<9} {'Leak':<8} {'Deploy'}")
-    print("  " + "-" * 76)
+    print("=" * 100)
+
+    # ── Table 1: probabilistic metrics ──────────────────────────────────────
+    print(f"\n  {'City':<12} {'Status':<10} {'FusionAUC':<11} {'TEST_AUC':<10} "
+          f"{'TEST_ECE':<10} {'Brier':<8} {'h_AUC':<9} {'Leak':<8} {'Deploy'}")
+    print("  " + "-" * 92)
     for r in results:
         fa   = r.get("fusion_internal_auc")
         ta   = r.get("test_auc")
         te   = r.get("test_ece")
+        tb   = r.get("test_brier")
         ha   = r.get("holdout_auc")
         leak = r.get("leakage_category", "UNKNOWN")
         gap  = r.get("gap_flag", "")
         fs = f"{float(fa):.4f}" if fa is not None else "NaN"
         ts = f"{float(ta):.4f}" if ta is not None else "N/A"
         es = f"{float(te):.4f}" if te is not None else "N/A"
+        bs = f"{float(tb):.4f}" if tb is not None else "N/A"
         hs = f"{float(ha):.4f}" if ha is not None else "N/A"
 
         issues = []
@@ -853,14 +909,50 @@ def main() -> None:
         deploy = "READY" if not issues else ("CAUTION" if len(issues) == 1 else "BLOCKED")
 
         print(f"  {r['city']:<12} {r['status']:<10} {fs:<11} {ts:<10} {es:<10} "
-              f"{hs:<9} {leak:<8} {deploy}"
+              f"{bs:<8} {hs:<9} {leak:<8} {deploy}"
               + (f"  <- {', '.join(issues)}" if issues else ""))
-    print("=" * 80)
+
+    # ── Table 2: tier-aware classification metrics ───────────────────────────
+    print(f"\n  ADVISORY TIER  (recall-priority -- threshold derived at recall >= 85%)")
+    print(f"  {'City':<12} {'Adv.Thr':<10} {'Precision':<11} {'Recall':<10} {'F1':<10} {'T.Source'}")
+    print("  " + "-" * 70)
+    for r in results:
+        adv_thr = r.get("alert_tier_advisory_threshold")
+        p_adv   = r.get("test_precision_advisory")
+        r_adv   = r.get("test_recall_advisory")
+        f_adv   = r.get("test_f1_advisory")
+        src     = r.get("alert_tier_threshold_source", "N/A")
+        ts_adv  = f"{float(adv_thr):.4f}" if adv_thr is not None else "N/A"
+        ps_adv  = f"{float(p_adv):.4f}"   if p_adv   is not None else "N/A"
+        rs_adv  = f"{float(r_adv):.4f}"   if r_adv   is not None else "N/A"
+        fs_adv  = f"{float(f_adv):.4f}"   if f_adv   is not None else "N/A"
+        print(f"  {r['city']:<12} {ts_adv:<10} {ps_adv:<11} {rs_adv:<10} {fs_adv:<10} {src}")
+
+    print(f"\n  ALERT TIER  (precision-priority -- threshold derived at precision >= 65%)")
+    print(f"  {'City':<12} {'Alrt.Thr':<10} {'Precision':<11} {'Recall':<10} {'F1':<10} "
+          f"  [F1 is a balance metric -- not the primary optimisation target]")
+    print("  " + "-" * 70)
+    for r in results:
+        alrt_thr = r.get("alert_tier_alert_threshold")
+        p_alrt   = r.get("test_precision_alert")
+        r_alrt   = r.get("test_recall_alert")
+        f_alrt   = r.get("test_f1_alert")
+        ts_alrt  = f"{float(alrt_thr):.4f}" if alrt_thr is not None else "N/A"
+        ps_alrt  = f"{float(p_alrt):.4f}"   if p_alrt   is not None else "N/A"
+        rs_alrt  = f"{float(r_alrt):.4f}"   if r_alrt   is not None else "N/A"
+        fs_alrt  = f"{float(f_alrt):.4f}"   if f_alrt   is not None else "N/A"
+        print(f"  {r['city']:<12} {ts_alrt:<10} {ps_alrt:<11} {rs_alrt:<10} {fs_alrt:<10}")
+
+    print("\n" + "=" * 100)
     print("\n  KEY:")
-    print("  FusionAUC = internal AUC on CAL OOF folds (in-distribution, informational)")
-    print("  TEST_AUC  = unbiased AUC on held-out TEST set (primary metric)")
-    print("  TEST_ECE  = real calibration error — calibrator fitted on CAL, not TEST")
-    print("  h_AUC     = holdout 2023-2024 AUC\n")
+    print("  FusionAUC  = internal AUC on CAL OOF folds (in-distribution, informational)")
+    print("  TEST_AUC   = unbiased AUC on held-out TEST set (primary metric)")
+    print("  TEST_ECE   = real calibration error — calibrator fitted on CAL, not TEST")
+    print("  Brier      = Brier Score on calibrated probabilities (probabilistic quality; lower=better)")
+    print("  h_AUC      = holdout 2023-2024 AUC")
+    print("  Adv.Thr    = advisory threshold (recall-priority; lowest thr achieving recall >= 85%)")
+    print("  Alrt.Thr   = alert threshold (precision-priority; highest thr achieving precision >= 65%)")
+    print("  F1         = balance metric reported for academic completeness; not the primary target\n")
 
 
 if __name__ == "__main__":
