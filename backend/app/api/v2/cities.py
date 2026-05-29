@@ -2,11 +2,17 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+import time
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from app.api.deps import require_admin
+
+# Simple TTL cache for cities_overview weather snapshots.
+# Avoids redundant live WeatherAPI calls when the endpoint is polled frequently.
+_OVERVIEW_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_OVERVIEW_TTL_SECONDS = 60
 from app.schemas.v2 import (
     WeatherInputV2, CityPredictBody, PredictionResponseV2, CitiesListV2, CityStatusV2,
     TrainingRequestV2, TrainingRunResponseV2,
@@ -57,12 +63,10 @@ async def cities_overview():
         return_exceptions=True,
     )
 
-    results = []
-    for c, snap in zip(cities, snaps):
-        raw = snap if isinstance(snap, dict) else {}
+    async def _predict_safe(c: dict, raw: dict) -> dict | None:
         try:
             result = await city_model_service.predict_v2(c["slug"], raw)
-            results.append({
+            return {
                 "slug":             c["slug"],
                 "name":             c["name"],
                 "risk_band":        result.get("risk_band", "Low"),
@@ -70,20 +74,37 @@ async def cities_overview():
                 "event_probability":result.get("event_probability"),
                 "alert_tier_label": result.get("alert_tier_label", "NORMAL"),
                 "source":           result.get("source", "unknown"),
-            })
+            }
         except Exception as exc:
             logger.debug("overview predict failed for %s: %s", c["slug"], exc)
+            return None
+
+    city_raws = [(c, snap if isinstance(snap, dict) else {}) for c, snap in zip(cities, snaps)]
+    predictions = await asyncio.gather(*[_predict_safe(c, raw) for c, raw in city_raws])
+    results = [p for p in predictions if p is not None]
 
     return {"cities": results, "count": len(results), "live_weather": True}
 
 
 async def _fetch_weather_safe(slug: str, weather_provider) -> dict:
-    """Fetch live weather for one city; returns empty dict on any failure."""
+    """Fetch live weather for one city with a 60-second in-process TTL cache.
+
+    Repeated calls within the TTL window reuse the cached snapshot, preventing
+    redundant external API round-trips when /cities/overview is polled frequently.
+    Returns empty dict on any failure (non-fatal).
+    """
+    now = time.monotonic()
+    cached_at, cached_data = _OVERVIEW_CACHE.get(slug, (0.0, {}))
+    if now - cached_at < _OVERVIEW_TTL_SECONDS and cached_data:
+        return cached_data
+
     try:
         if weather_provider is None:
             return {}
         snap = await weather_provider.get_current(slug)
-        return snap.to_feature_dict()
+        result = snap.to_feature_dict()
+        _OVERVIEW_CACHE[slug] = (now, result)
+        return result
     except Exception as exc:
         logger.warning("overview_weather_miss city=%s: %s", slug, exc)
         return {}

@@ -74,7 +74,7 @@ def login(req: LoginRequest) -> TokenResponse:
     )
 
 
-def refresh_tokens(req: RefreshRequest) -> AccessTokenResponse:
+def refresh_tokens(req: RefreshRequest) -> TokenResponse:
     try:
         payload = decode_token(req.refresh_token)
     except ValueError:
@@ -96,9 +96,19 @@ def refresh_tokens(req: RefreshRequest) -> AccessTokenResponse:
             repo.update_refresh_token(user, None)
             raise HTTPException(status_code=401, detail="Refresh token reuse detected. Please log in again.")
 
-        new_access = create_access_token(user.id, user.role, user.username)
+        new_access   = create_access_token(user.id, user.role, user.username)
+        new_refresh  = create_refresh_token(user.id)
+        role         = user.role
+        username     = user.username
+        # Rotate: store hash of the new token so the old one is invalid on next use
+        repo.update_refresh_token(user, hash_refresh_token(new_refresh))
 
-    return AccessTokenResponse(access_token=new_access)
+    return TokenResponse(
+        access_token  = new_access,
+        refresh_token = new_refresh,
+        role          = role,
+        username      = username,
+    )
 
 
 def logout(user_id: int) -> None:

@@ -357,7 +357,7 @@ class MCInferenceConfig:
     # Feature flag — set to false to revert to deterministic model.predict()
     ENABLED: bool = os.getenv("ENABLE_MC_INFERENCE", "true").lower() in ("true", "1", "yes")
     # Stochastic forward passes per branch per request
-    DROPOUT_SAMPLES: int = int(os.getenv("MC_DROPOUT_SAMPLES", "15"))
+    DROPOUT_SAMPLES: int = int(os.getenv("MC_DROPOUT_SAMPLES", "3"))
     # Wall-clock timeout for asyncio.gather; fallback triggers on exceed
     INFERENCE_TIMEOUT_MS: int = int(os.getenv("MC_INFERENCE_TIMEOUT_MS", "3000"))
     # Uncertainty merge weights (heuristic blend; sum should equal 1.0)

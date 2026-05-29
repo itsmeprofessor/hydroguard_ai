@@ -49,13 +49,14 @@ def _build_record_response(r) -> AnomalyRecordResponse:
 @router.get("", response_model=AnomalyListResponse)
 async def get_anomalies(
     skip:           int           = Query(0, ge=0),
-    limit:          int           = Query(50, ge=1, le=100),
+    limit:          int           = Query(50, ge=1),
     city:           Optional[str] = Query(None),
     risk_level:     Optional[str] = Query(None),
     start_date:     Optional[date] = Query(None),
     end_date:       Optional[date] = Query(None),
     anomalies_only: bool           = Query(True),
 ):
+    limit = min(limit, 100)   # cap silently — never raise 422 for oversized limit
     try:
         with get_db() as db:
             repo    = AnomalyRepository(db)

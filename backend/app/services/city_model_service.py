@@ -847,18 +847,22 @@ class CityModelService:
                     "[%s] MC inference timeout (>%dms) — falling back to deterministic",
                     slug, MCInferenceConfig.INFERENCE_TIMEOUT_MS,
                 )
-                degraded_reason = "timeout"
-                inference_mode  = "fallback_deterministic"
+                degraded_reason      = "timeout"
+                inference_mode       = "fallback_deterministic"
+                prediction_stability = "degraded"
                 _mc_success_window[slug].append(False)
                 _timeout_counter[slug].append(False)
             except Exception as exc:
                 logger.warning("[%s] MC inference exception — falling back: %s", slug, exc)
-                degraded_reason = "exception"
-                inference_mode  = "fallback_deterministic"
+                degraded_reason      = "exception"
+                inference_mode       = "fallback_deterministic"
+                prediction_stability = "degraded"
                 _mc_success_window[slug].append(False)
                 _timeout_counter[slug].append(False)
         else:
-            degraded_reason = "disabled"
+            # MC disabled intentionally — deterministic mode, no uncertainty computed
+            degraded_reason      = "disabled"
+            prediction_stability = "stable"
 
         # MC success rate monitoring (in-memory rolling window)
         _win = _mc_success_window[slug]
@@ -958,7 +962,17 @@ class CityModelService:
         # Per-city optimal threshold loaded from training_metrics.json (PR-curve optimized)
         alert_threshold = self._get_alert_threshold(slug)
         is_alert    = p_calib >= alert_threshold
-        hri_score   = {"Low": 12, "Moderate": 40, "High": 68, "Severe": 88, "Evac": 95}.get(risk_band, 12)
+        # Dynamic HRI: blend calibrated ML probability with weather severity so that
+        # extreme-input observations produce an informative score even when the
+        # FusionModel is conservative (e.g. event_probability near 0 on heavy rain days).
+        _prcp_norm = min(float(raw_weather.get("prcp") or 0.0) / 100.0, 1.0)
+        _hum_raw   = float(raw_weather.get("humidity") or 60.0)
+        _hum_norm  = max(0.0, (_hum_raw - 40.0) / 60.0)       # 40% base → 100% = 1.0
+        _pres_raw  = float(raw_weather.get("pressure") or 1013.0)
+        _pres_norm = max(0.0, (1015.0 - _pres_raw) / 60.0)    # 955–1015 hPa range
+        _wx_sev    = 0.50 * _prcp_norm + 0.30 * _hum_norm + 0.20 * _pres_norm
+        _hri_raw   = 0.40 * float(p_calib) + 0.60 * _wx_sev
+        hri_score  = int(round(min(_hri_raw, 1.0) * 100))
         alert_tier  = self._compute_alert_tier(p_calib, alert_threshold)
 
         # Two-tier alert semantics — additive fields, backward compat preserved

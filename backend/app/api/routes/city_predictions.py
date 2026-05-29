@@ -258,27 +258,34 @@ async def cities_overview():
     weather_tasks = [_get_weather(c["slug"]) for c in city_list]
     all_features  = await asyncio.gather(*weather_tasks, return_exceptions=True)
 
-    results: List[Dict[str, Any]] = []
-    for city, features in zip(city_list, all_features):
+    async def _predict_one(city: dict, features) -> Optional[Dict[str, Any]]:
         slug = city["slug"]
-        if isinstance(features, Exception):
-            features = _default_weather(slug)
-        pred = await city_model_service.predict_v2(city_slug=slug, raw_weather=features)
-        risk_level = _RISK_BAND_TO_LEVEL.get(pred.get("risk_band", "Low"), "Low")
-        results.append({
-            "city":         city["name"],
-            "city_slug":    slug,
-            "province":     city["province"],
-            "lat":          city["lat"],
-            "lon":          city["lon"],
-            "risk_level":   risk_level,
-            "hri_score":    pred["hri_score"],
-            "is_anomaly":   pred.get("is_alert", False),
-            "scenario":     _risk_to_scenario(risk_level),
-            "rainfall_mh":  features.get("prcp", 0),
-            "has_model":    city["has_model"],
-            "source":       pred.get("source", "—"),
-        })
+        raw  = _default_weather(slug) if isinstance(features, Exception) else features
+        try:
+            pred       = await city_model_service.predict_v2(city_slug=slug, raw_weather=raw)
+            risk_level = _RISK_BAND_TO_LEVEL.get(pred.get("risk_band", "Low"), "Low")
+            return {
+                "city":         city["name"],
+                "city_slug":    slug,
+                "province":     city["province"],
+                "lat":          city["lat"],
+                "lon":          city["lon"],
+                "risk_level":   risk_level,
+                "hri_score":    pred["hri_score"],
+                "is_anomaly":   pred.get("is_alert", False),
+                "scenario":     _risk_to_scenario(risk_level),
+                "rainfall_mh":  raw.get("prcp", 0),
+                "has_model":    city["has_model"],
+                "source":       pred.get("source", "—"),
+            }
+        except Exception as exc:
+            logger.debug("overview predict failed for %s: %s", slug, exc)
+            return None
+
+    predictions = await asyncio.gather(
+        *[_predict_one(city, features) for city, features in zip(city_list, all_features)]
+    )
+    results: List[Dict[str, Any]] = [p for p in predictions if p is not None]
     return {
         "overview":     results,
         "generated_at": datetime.now(timezone.utc).isoformat(),

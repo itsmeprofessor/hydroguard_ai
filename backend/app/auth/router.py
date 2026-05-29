@@ -9,7 +9,6 @@ from app.core.limiter import limiter
 from app.db.database import get_db
 from app.db.repositories.user_repo import UserRepository
 from .schemas import (
-    AccessTokenResponse,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
@@ -33,7 +32,7 @@ async def login(request: Request, req: LoginRequest):
     return service.login(req)
 
 
-@router.post("/refresh", response_model=AccessTokenResponse)
+@router.post("/refresh", response_model=TokenResponse)
 @limiter.limit("20/minute")
 async def refresh(request: Request, req: RefreshRequest):
     return service.refresh_tokens(req)
