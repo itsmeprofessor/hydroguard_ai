@@ -68,6 +68,48 @@ def test_from_cal_data_derives_thresholds(tmp_path):
     # Must derive non-default values — this is the happy path
     assert clf.advisory_threshold != DEFAULT_ADVISORY_THRESHOLD
     assert clf.alert_threshold != DEFAULT_ALERT_THRESHOLD
+    # Advisory must be the operating point (not the degenerate near-zero threshold)
+    assert clf.advisory_threshold > 0.5, (
+        f"Advisory threshold {clf.advisory_threshold:.4f} collapsed — "
+        "expected operating point near positive score range (0.80-0.99)"
+    )
+
+
+def test_advisory_threshold_is_operating_point_not_degenerate(tmp_path):
+    """Advisory threshold must be the highest threshold meeting recall target
+    (operating point), not the trivially permissive near-zero threshold.
+
+    With bimodal scores (positives high, negatives low), the lowest threshold
+    meeting recall >= 85% would be ~0 (flag everything). The correct threshold
+    is the highest one still achieving recall >= 85%, which sits at the boundary
+    of the positive cluster.
+    """
+    rng = np.random.default_rng(7)
+    n = 400
+    y_true = np.zeros(n, dtype=int)
+    y_true[:80] = 1  # 20% positive rate
+    y_score = np.where(
+        y_true == 1,
+        rng.uniform(0.55, 0.92, n),
+        rng.uniform(0.02, 0.30, n),
+    )
+    cal_path = tmp_path / "cal_data.npz"
+    np.savez(cal_path, y_true=y_true, y_score=y_score)
+
+    clf = AlertTierClassifier.from_cal_data(cal_path)
+
+    # Threshold must be meaningfully above zero (not degenerate)
+    assert clf.advisory_threshold > 0.10, (
+        f"Degenerate advisory threshold: {clf.advisory_threshold:.4f}. "
+        "Expected operating point near positive score range."
+    )
+    # Verify the recall constraint is actually met at that threshold
+    y_pred = (y_score >= clf.advisory_threshold).astype(int)
+    achieved_recall = float((y_pred[y_true == 1]).mean())
+    assert achieved_recall >= 0.85, (
+        f"Advisory threshold {clf.advisory_threshold:.4f} only achieves "
+        f"recall={achieved_recall:.3f}, below 0.85 target"
+    )
 
 
 def test_from_cal_data_falls_back_on_missing_file(tmp_path):

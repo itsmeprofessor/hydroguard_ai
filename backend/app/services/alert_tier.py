@@ -28,8 +28,15 @@ class AlertTierClassifier:
     time — not hardcoded, not dynamic at inference time. This ensures
     deterministic, auditable runtime behaviour.
 
-    advisory tier: elevated probability, high recall (>=85%) — in-app only
-    alert tier:    high probability, high precision (>=65%) — push-notification quality
+    advisory tier: recall-priority (>=85%) — in-app notification only.
+        Threshold = HIGHEST value still achieving the recall target.
+        This is the operating point at the recall boundary: the most
+        discriminative threshold that preserves the recall guarantee.
+        Using .min() instead would select the trivially permissive threshold
+        (~0) where everything fires and recall is trivially 100%.
+
+    alert tier:  precision-priority (>=65%) — push-notification quality.
+        Threshold = HIGHEST value still achieving the precision target.
     """
 
     def __init__(
@@ -78,8 +85,8 @@ class AlertTierClassifier:
 
             advisory_derived = advisory_mask.any()
             advisory_threshold = (
-                float(thresh[advisory_mask].min())   # lowest threshold still achieving target recall
-                if advisory_derived
+                float(thresh[advisory_mask].max())   # highest threshold still meeting recall target
+                if advisory_derived                  # = operating point at the recall boundary
                 else DEFAULT_ADVISORY_THRESHOLD
             )
             if not advisory_derived:
