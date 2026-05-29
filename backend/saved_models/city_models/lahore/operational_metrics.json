@@ -17,8 +17,8 @@
   "precision_top10": {
     "k_pct": 0.1,
     "n_top": 73,
-    "precision": 0.8082,
-    "n_true_pos": 59
+    "precision": 0.8356,
+    "n_true_pos": 61
   },
   "event_recall": {
     "n_events": 1,
@@ -40,34 +40,34 @@
     }
   },
   "false_alarm": {
-    "false_alarms": 23,
-    "total_alerts": 101,
-    "far_per_100": 22.77,
+    "false_alarms": 14,
+    "total_alerts": 92,
+    "far_per_100": 15.22,
     "by_month": {
-      "1": 13.79,
-      "2": 40.0,
+      "1": 7.14,
+      "2": 25.0,
       "3": 0.0,
       "4": 0.0,
       "5": 0.0,
       "6": 0.0,
-      "7": 20.0,
-      "8": 11.11,
-      "9": 50.0,
+      "7": 15.38,
+      "8": 12.5,
+      "9": 40.0,
       "10": 0.0,
-      "11": 60.0,
-      "12": 33.33
+      "11": 25.0,
+      "12": 25.0
     },
     "by_season": {
-      "Winter": 20.93,
+      "Winter": 12.5,
       "Spring": 0.0,
-      "Monsoon": 23.91,
-      "Autumn": 37.5
+      "Monsoon": 20.0,
+      "Autumn": 14.29
     }
   },
   "alert_stability": {
-    "oscillation_count": 91,
-    "volatility_score": 0.1247,
-    "n_single_day_spikes": 21
+    "oscillation_count": 89,
+    "volatility_score": 0.1219,
+    "n_single_day_spikes": 24
   },
   "persistence": {
     "n_events_assessed": 1,

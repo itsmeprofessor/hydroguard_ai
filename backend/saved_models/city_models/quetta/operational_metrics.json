@@ -5,20 +5,20 @@
   "precision_top1": {
     "k_pct": 0.01,
     "n_top": 7,
-    "precision": 1.0,
-    "n_true_pos": 7
+    "precision": 0.7143,
+    "n_true_pos": 5
   },
   "precision_top5": {
     "k_pct": 0.05,
     "n_top": 36,
-    "precision": 0.9167,
-    "n_true_pos": 33
+    "precision": 0.8889,
+    "n_true_pos": 32
   },
   "precision_top10": {
     "k_pct": 0.1,
     "n_top": 73,
-    "precision": 0.4658,
-    "n_true_pos": 34
+    "precision": 0.5479,
+    "n_true_pos": 40
   },
   "event_recall": {
     "n_events": 0,
@@ -36,34 +36,34 @@
     "by_event": {}
   },
   "false_alarm": {
-    "false_alarms": 4,
-    "total_alerts": 37,
-    "far_per_100": 10.81,
+    "false_alarms": 11,
+    "total_alerts": 47,
+    "far_per_100": 23.4,
     "by_month": {
       "1": 0.0,
       "2": 0.0,
-      "3": 0.0,
-      "4": 16.67,
+      "3": 14.29,
+      "4": 28.57,
       "5": 0.0,
       "6": 0.0,
       "7": 100.0,
-      "8": 33.33,
+      "8": 25.0,
       "9": 100.0,
       "10": 0.0,
       "11": 0.0,
-      "12": 0.0
+      "12": 100.0
     },
     "by_season": {
-      "Winter": 0.0,
-      "Spring": 5.88,
-      "Monsoon": 60.0,
+      "Winter": 6.25,
+      "Spring": 19.05,
+      "Monsoon": 66.67,
       "Autumn": 0.0
     }
   },
   "alert_stability": {
-    "oscillation_count": 50,
-    "volatility_score": 0.0685,
-    "n_single_day_spikes": 18
+    "oscillation_count": 58,
+    "volatility_score": 0.0795,
+    "n_single_day_spikes": 20
   },
   "persistence": {
     "n_events_assessed": 0,
