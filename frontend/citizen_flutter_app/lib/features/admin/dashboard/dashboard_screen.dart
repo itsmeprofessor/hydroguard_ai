@@ -881,13 +881,9 @@ class _OperationsGrid extends StatelessWidget {
     final items = [
       _QuickAction(
         icon: Icons.notifications_active_rounded,
-        label: 'Issue alert',
+        label: 'Manual Prediction',
         color: HGColors.severe,
-        onTap: () => ScaffoldMessenger.of(buildContext).showSnackBar(
-          SnackBar(
-              content: Text(
-                  'Issue alert: POST /api/v2/cities/$city/predict — full form coming soon')),
-        ),
+        onTap: () => buildContext.push('/admin/predict'),
       ),
       _QuickAction(
         icon: Icons.auto_awesome_rounded,

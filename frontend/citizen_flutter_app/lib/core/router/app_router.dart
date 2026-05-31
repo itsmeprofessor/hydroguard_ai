@@ -19,6 +19,7 @@ import '../../features/admin/city_hri/city_hri_screen.dart';
 import '../../features/admin/alerts/admin_alerts_screen.dart';
 import '../../features/admin/map/admin_map_screen.dart';
 import '../../features/admin/more/admin_more_screen.dart';
+import '../../features/admin/predict/admin_predict_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -115,6 +116,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
               path: '/admin/more',
               builder: (_, __) => const AdminMoreScreen()),
+          GoRoute(
+              path: '/admin/predict',
+              builder: (_, __) => const AdminPredictScreen()),
         ],
       ),
     ],

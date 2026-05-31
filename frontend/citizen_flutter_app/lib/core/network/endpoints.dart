@@ -18,6 +18,7 @@ class Endpoints {
   static String cityAlerts(String slug)   => '/api/v2/cities/$slug/alerts';
   static String cityStatus(String slug)   => '/api/v2/cities/$slug/status';
   static String cityTrain(String slug)    => '/api/v2/cities/$slug/train';
+  static String cityPredict(String slug)  => '/api/v2/cities/$slug/predict';
 
   // System
   static const String health    = '/health';

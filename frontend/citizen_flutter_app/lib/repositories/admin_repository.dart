@@ -24,4 +24,13 @@ class AdminRepository {
   Future<void> trainCity(String slug) async {
     await _api.post(Endpoints.cityTrain(slug));
   }
+
+  Future<Map<String, dynamic>> predictCity(
+      String slug, Map<String, dynamic> params) async {
+    final res = await _api.post(
+      Endpoints.cityPredict(slug),
+      data: params,
+    );
+    return res.data as Map<String, dynamic>;
+  }
 }
