@@ -15,8 +15,10 @@ class ApiClient {
     if (_initialized) return;
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 30),
+      // Flutter web uses XHR where connectTimeout = total request timeout.
+      // Forecast endpoint calls WeatherAPI which can take 8-10s.
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
     ));
     _dio.interceptors.add(_AuthInterceptor(_dio));
     if (kDebugMode) {

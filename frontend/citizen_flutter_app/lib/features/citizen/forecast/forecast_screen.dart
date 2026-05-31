@@ -51,7 +51,7 @@ class ForecastScreen extends ConsumerWidget {
         ),
       ),
       body: forecastAsync.when(
-        loading: () => const Center(child: HGSkeleton()),
+        loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

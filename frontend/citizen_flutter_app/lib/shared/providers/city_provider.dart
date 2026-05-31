@@ -17,15 +17,17 @@ final currentCitySlugProvider = Provider<String>((ref) {
       .replaceAll(RegExp(r'[^a-z0-9_]'), '');
 });
 
-/// City risk — refreshable, per-slug family
+/// City risk — per-slug family.
+/// Not autoDispose: navigation transitions briefly rebuild widgets and
+/// autoDispose would cancel the in-flight Dio/XHR request mid-load.
 final cityRiskProvider =
-    FutureProvider.autoDispose.family<CityRiskModel, String>((ref, slug) async {
+    FutureProvider.family<CityRiskModel, String>((ref, slug) async {
   return _cityRepo.getCityRisk(slug);
 });
 
-/// Forecast — per-slug family
-final forecastProvider = FutureProvider.autoDispose
-    .family<List<ForecastDayModel>, String>((ref, slug) async {
+/// Forecast — per-slug family (not autoDispose for same reason as cityRiskProvider).
+final forecastProvider =
+    FutureProvider.family<List<ForecastDayModel>, String>((ref, slug) async {
   return _cityRepo.getForecast(slug);
 });
 
