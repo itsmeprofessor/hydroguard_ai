@@ -90,17 +90,29 @@ class TestAnomalies:
 # ============================================================
 
 class TestPrediction:
-    def test_predict_missing_city(self, client):
-        """v1 /predict is tombstoned — returns 308 regardless of body content."""
-        r = client.post("/predict", json={"tmin": 25.0}, follow_redirects=False)
-        assert r.status_code == 308
-
-    def test_predict_invalid_humidity(self, client):
-        """humidity > 100 violates field constraint — expect 422."""
-        r = client.post("/predict", json={"city": "Islamabad", "humidity": 150})
+    def test_predict_missing_city(self, client, auth_headers):
+        """v1 /predict requires auth and city in body.
+        Without city, the tombstone handler raises 422 before issuing the 308."""
+        r = client.post(
+            "/predict",
+            json={"tmin": 25.0},
+            headers=auth_headers,
+            follow_redirects=False,
+        )
         assert r.status_code == 422
 
-    def test_predict_or_graceful_fail(self, client):
+    def test_predict_invalid_humidity(self, client, auth_headers):
+        """humidity > 100 violates Pydantic field constraint on the v2 endpoint.
+        The tombstone 308-redirects to v2/cities/islamabad/predict which validates
+        the body and returns 422."""
+        r = client.post(
+            "/predict",
+            json={"city": "Islamabad", "humidity": 150},
+            headers=auth_headers,
+        )
+        assert r.status_code == 422
+
+    def test_predict_or_graceful_fail(self, client, auth_headers):
         """v1 /predict is tombstoned (308). Redirect lands on v2 endpoint.
         v2 returns 200 (heuristic/model) or 404 (city not found).
         Sending a full v2-compatible payload to avoid 422."""
@@ -113,7 +125,7 @@ class TestPrediction:
             "tmin":        25.5,
             "cloud_cover": 90.0,
         }
-        r = client.post("/predict", json=payload)
+        r = client.post("/predict", json=payload, headers=auth_headers)
         # 308 redirect -> 200 (v2 prediction) or 404 (city not in dataset)
         assert r.status_code in (200, 308, 404)
         if r.status_code == 200:
@@ -204,19 +216,23 @@ if __name__ == "__main__":
 
 @pytest.fixture(scope="session")
 def auth_headers(client):
-    """Get a valid JWT token for test requests (session-scoped)."""
-    reg = client.post("/auth/register", json={
+    """Get a valid JWT token for test requests (session-scoped).
+
+    Registers a test account (idempotent — accepts 400 if already exists),
+    then logs in with email + password to obtain an access token.
+    LoginRequest uses 'email', not 'username'.
+    """
+    client.post("/auth/register", json={
         "username": "v2testuser", "email": "v2test@test.com",
         "password": "TestPass123!"
     })
-    if reg.status_code not in (200, 201, 400):
-        return {}
     login = client.post("/auth/login", json={
-        "username": "v2testuser", "password": "TestPass123!"
+        "email": "v2test@test.com", "password": "TestPass123!"
     })
-    if login.status_code != 200:
-        return {}
-    token = login.json().get("access_token", "")
+    assert login.status_code == 200, (
+        f"auth_headers fixture: login failed ({login.status_code}): {login.text}"
+    )
+    token = login.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../storage/secure_storage.dart';
@@ -16,7 +17,6 @@ class ApiClient {
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 30),
-      // Do NOT set Content-Type globally — GET requests must not send it (CORS)
     ));
     _dio.interceptors.add(_AuthInterceptor(_dio));
     if (kDebugMode) {
@@ -27,11 +27,9 @@ class ApiClient {
 
   Dio get dio => _dio;
 
-  // GET helper — never adds Content-Type
   Future<Response<T>> get<T>(String path, {Map<String, dynamic>? queryParameters}) =>
       _dio.get<T>(path, queryParameters: queryParameters);
 
-  // POST helper — adds Content-Type for POST
   Future<Response<T>> post<T>(String path, {dynamic data}) =>
       _dio.post<T>(path,
         data: data,
@@ -42,10 +40,18 @@ class ApiClient {
 class _AuthInterceptor extends Interceptor {
   _AuthInterceptor(this._dio);
   final Dio _dio;
-  bool _refreshing = false;
+
+  // Serialises concurrent refresh attempts: null = no refresh in flight.
+  // Any subsequent 401 awaits this completer instead of launching a second refresh.
+  Completer<void>? _refreshCompleter;
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    // skipAuth: skip token injection for the refresh call itself
+    if (options.extra['skipAuth'] == true) {
+      handler.next(options);
+      return;
+    }
     final token = await SecureStorage.instance.getAccessToken();
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
@@ -55,38 +61,57 @@ class _AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    if (err.response?.statusCode == 401 && !_refreshing) {
-      _refreshing = true;
-      try {
-        final refreshToken = await SecureStorage.instance.getRefreshToken();
-        if (refreshToken == null) throw Exception('No refresh token');
+    if (err.response?.statusCode != 401) {
+      handler.next(err);
+      return;
+    }
 
-        final response = await _dio.post(
-          Endpoints.refresh,
-          data: {'refresh_token': refreshToken},
-          options: Options(
-            headers: {'Content-Type': 'application/json'},
-            extra: {'skipAuth': true},
-          ),
-        );
-        final newAccess  = response.data['access_token']  as String;
-        final newRefresh = response.data['refresh_token'] as String;
-        await SecureStorage.instance.saveTokens(
-          accessToken: newAccess,
-          refreshToken: newRefresh,
-        );
-        // Retry original request
-        err.requestOptions.headers['Authorization'] = 'Bearer $newAccess';
+    // Another refresh is already in flight — await it, then retry.
+    if (_refreshCompleter != null) {
+      try {
+        await _refreshCompleter!.future;
+        final token = await SecureStorage.instance.getAccessToken();
+        err.requestOptions.headers['Authorization'] = 'Bearer $token';
         final retried = await _dio.fetch(err.requestOptions);
         handler.resolve(retried);
-        return;
       } catch (_) {
-        await SecureStorage.instance.clearAll();
-        // Signal session expired — router redirect handles navigation
-      } finally {
-        _refreshing = false;
+        handler.next(err);
       }
+      return;
     }
-    handler.next(err);
+
+    // Start a new refresh.
+    _refreshCompleter = Completer<void>();
+    try {
+      final refreshToken = await SecureStorage.instance.getRefreshToken();
+      if (refreshToken == null) throw Exception('No refresh token');
+
+      final response = await _dio.post(
+        Endpoints.refresh,
+        data: {'refresh_token': refreshToken},
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+          extra: {'skipAuth': true},
+        ),
+      );
+      final newAccess  = response.data['access_token']  as String;
+      final newRefresh = response.data['refresh_token'] as String;
+      await SecureStorage.instance.saveTokens(
+        accessToken: newAccess,
+        refreshToken: newRefresh,
+      );
+      _refreshCompleter!.complete();
+
+      // Retry original request with new token.
+      err.requestOptions.headers['Authorization'] = 'Bearer $newAccess';
+      final retried = await _dio.fetch(err.requestOptions);
+      handler.resolve(retried);
+    } catch (_) {
+      _refreshCompleter!.completeError('refresh_failed');
+      await SecureStorage.instance.clearAll();
+      handler.next(err); // propagate; router redirect reacts to authProvider state
+    } finally {
+      _refreshCompleter = null;
+    }
   }
 }

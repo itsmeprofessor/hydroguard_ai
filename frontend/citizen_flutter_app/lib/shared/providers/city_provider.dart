@@ -37,7 +37,7 @@ class AlertsNotifier extends StateNotifier<List<AlertItemModel>> {
 
   Future<void> _load(String slug) async {
     try {
-      final list = await CityRepository().getAlerts(slug);
+      final list = await _cityRepo.getAlerts(slug);
       if (mounted) state = list;
     } catch (_) {}
   }
