@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "hydroguard_citizen" "\0"
+            VALUE "CompanyName", "com.hydroguard" "\0"
+            VALUE "FileDescription", "citizen_flutter_app" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "hydroguard_citizen" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "hydroguard_citizen.exe" "\0"
-            VALUE "ProductName", "hydroguard_citizen" "\0"
+            VALUE "InternalName", "citizen_flutter_app" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.hydroguard. All rights reserved." "\0"
+            VALUE "OriginalFilename", "citizen_flutter_app.exe" "\0"
+            VALUE "ProductName", "citizen_flutter_app" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
