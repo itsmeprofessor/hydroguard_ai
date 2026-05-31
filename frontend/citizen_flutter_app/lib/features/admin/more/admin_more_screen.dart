@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../repositories/admin_repository.dart';
 import '../../../shared/providers/admin_provider.dart';
@@ -47,21 +48,21 @@ class _AdminMoreScreenState extends ConsumerState<AdminMoreScreen> {
   }
 
   Future<void> _confirmSignOut() async {
+    // Use dialogCtx (not outer context) so Navigator.pop closes the dialog,
+    // not the GoRouter shell behind it.
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Sign out?'),
-        content: const Text(
-            'You will be returned to the login screen.'),
+        content: const Text('You will be returned to the login screen.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(
-                foregroundColor: HGColors.severe),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: HGColors.severe),
             child: const Text('Sign out'),
           ),
         ],
@@ -410,8 +411,8 @@ class _AdminMoreScreenState extends ConsumerState<AdminMoreScreen> {
                             label: 'Backend',
                             value: healthAsync.whenOrNull(
                                     data: (h) =>
-                                        h.status == 'ok'
-                                            ? 'Running'
+                                        (h.status == 'ok' || h.status == 'healthy')
+                                            ? 'healthy'
                                             : h.status) ??
                                 '—',
                           ),
@@ -448,7 +449,28 @@ class _AdminMoreScreenState extends ConsumerState<AdminMoreScreen> {
                     ),
                     const SizedBox(height: 28),
 
-                    // 5. Sign out
+                    // 5. View as Citizen
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => context.go('/citizen/home'),
+                        icon: const Icon(Icons.person_outline_rounded, size: 18),
+                        label: const Text('View as Citizen',
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: HGColors.blue,
+                          side: const BorderSide(color: HGColors.blue),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 6. Sign out
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
