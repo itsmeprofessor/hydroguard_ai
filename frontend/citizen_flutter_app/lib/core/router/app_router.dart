@@ -34,16 +34,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAdmin  = authState.isAdmin;
       final location = state.matchedLocation;
 
-      if (loading) return '/splash';
+      // While loading, stay on splash; redirect everything else to splash
+      if (loading) return location == '/splash' ? null : '/splash';
+
+      // Done loading — always leave splash
+      if (location == '/splash') {
+        return authed
+            ? (isAdmin ? '/admin/dashboard' : '/citizen/home')
+            : '/login';
+      }
 
       if (!authed) {
-        const publicRoutes = ['/login', '/signup', '/forgot-password', '/splash'];
+        const publicRoutes = ['/login', '/signup', '/forgot-password'];
         if (!publicRoutes.contains(location)) return '/login';
         return null;
       }
 
-      // Authenticated
-      if (location == '/splash' || location == '/login' || location == '/signup') {
+      // Authenticated — leave auth screens
+      if (location == '/login' || location == '/signup') {
         return isAdmin ? '/admin/dashboard' : '/citizen/home';
       }
 
