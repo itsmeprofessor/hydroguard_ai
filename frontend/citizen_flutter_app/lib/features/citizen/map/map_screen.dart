@@ -154,7 +154,7 @@ class CitizenMapScreen extends ConsumerWidget {
                         style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF0B1220)),
+                            color: HGColors.textLight),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -326,7 +326,7 @@ class _LayerSwitcherState extends State<_LayerSwitcher> {
                     fontWeight: FontWeight.w600,
                     color: isActive
                         ? HGColors.blue
-                        : const Color(0xFF5B6573),
+                        : HGColors.mutedLight,
                   ),
                 ),
               ),

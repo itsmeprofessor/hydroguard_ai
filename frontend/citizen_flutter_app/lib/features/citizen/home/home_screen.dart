@@ -239,6 +239,7 @@ class _HeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final tier = _tiers[risk.alertTier] ?? _tiers[1]!;
     final stab = _stability[risk.stability] ?? _stability['stable']!;
     final hri = risk.hriScore;
@@ -251,16 +252,21 @@ class _HeroSection extends StatelessWidget {
         : 'ML ensemble monitoring. HRI $hri/100 · '
             '${risk.modelVersion.isNotEmpty ? risk.modelVersion : 'v3.3'}.';
 
-    final gradColors = switch (risk.levelKey) {
-      'severe' => [
-          const Color(0xFFFEE2E2),
-          const Color(0xFFFECACA),
-          const Color(0xFFF4F6FB)
-        ],
-      'warning' => [const Color(0xFFFFEDD5), const Color(0xFFF4F6FB)],
-      'watch' => [const Color(0xFFFEF3C7), const Color(0xFFF4F6FB)],
-      _ => [const Color(0xFFE0F2FE), const Color(0xFFF4F6FB)],
-    };
+    final gradColors = isDark
+        ? switch (risk.levelKey) {
+            'severe'  => [const Color(0xFF3A1818), const Color(0xFF1A0808), HGColors.bgDark],
+            'warning' => [const Color(0xFF2A1808), HGColors.bgDark],
+            'watch'   => [const Color(0xFF2A2008), HGColors.bgDark],
+            'monitor' => [const Color(0xFF0A2C33), HGColors.bgDark],
+            _         => [const Color(0xFF0B2A3F), HGColors.bgDark],
+          }
+        : switch (risk.levelKey) {
+            'severe'  => [const Color(0xFFFEE2E2), const Color(0xFFFECACA), const Color(0xFFF4F6FB)],
+            'warning' => [const Color(0xFFFFEDD5), const Color(0xFFF4F6FB)],
+            'watch'   => [const Color(0xFFFEF3C7), const Color(0xFFF4F6FB)],
+            'monitor' => [const Color(0xFFCFFAFE), const Color(0xFFF4F6FB)],
+            _         => [const Color(0xFFE0F2FE), const Color(0xFFF4F6FB)],
+          };
     final stops = risk.levelKey == 'severe' ? [0.0, 0.4, 1.0] : [0.0, 1.0];
 
     return Container(
@@ -316,10 +322,10 @@ class _HeroSection extends StatelessWidget {
           // Headline
           Text(
             _headline,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF0B1220),
+              color: isDark ? HGColors.textDark : HGColors.textLight,
             ),
           ),
           const SizedBox(height: 6),
@@ -327,7 +333,9 @@ class _HeroSection extends StatelessWidget {
           // Paragraph
           Text(
             _paragraph(city, hri),
-            style: const TextStyle(fontSize: 15, color: Color(0xFF5B6573)),
+            style: TextStyle(
+                fontSize: 15,
+                color: isDark ? HGColors.mutedDark : HGColors.mutedLight),
           ),
           const SizedBox(height: 16),
 
@@ -369,9 +377,14 @@ class _HeroSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.85),
+              color: isDark
+                  ? HGColors.cardDark.withValues(alpha: 0.9)
+                  : Colors.white.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0x1A000000)),
+              border: Border.all(
+                  color: isDark
+                      ? HGColors.lineDark
+                      : const Color(0x1A000000)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -380,13 +393,15 @@ class _HeroSection extends StatelessWidget {
                   children: [
                     const Text('✨', style: TextStyle(fontSize: 14)),
                     const SizedBox(width: 6),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'HydroGuard ML · forecast confidence',
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF0B1220)),
+                            color: isDark
+                                ? HGColors.textDark
+                                : HGColors.textLight),
                       ),
                     ),
                     Text(
@@ -400,14 +415,19 @@ class _HeroSection extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(aiBody,
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF5B6573))),
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: isDark
+                            ? HGColors.mutedDark
+                            : HGColors.mutedLight)),
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: risk.confidencePct / 100,
-                    backgroundColor: const Color(0xFFDBEAFE),
+                    backgroundColor: isDark
+                        ? HGColors.blueSoftDark
+                        : HGColors.blueSoft,
                     valueColor:
                         const AlwaysStoppedAnimation<Color>(HGColors.blue),
                     minHeight: 5,
@@ -452,24 +472,25 @@ class _MetricCol extends StatelessWidget {
       {required this.label, required this.value, required this.unit});
 
   @override
-  Widget build(BuildContext context) => Expanded(
-        child: Column(
-          children: [
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 10, color: Color(0xFF8B95A5))),
-            const SizedBox(height: 2),
-            Text(value,
-                style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0B1220))),
-            Text(unit,
-                style: const TextStyle(
-                    fontSize: 10, color: Color(0xFF8B95A5))),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? HGColors.textDark : HGColors.textLight;
+    final dim = isDark ? HGColors.dimDark : HGColors.dimLight;
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(fontSize: 10, color: dim)),
+          const SizedBox(height: 2),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: textColor)),
+          Text(unit, style: TextStyle(fontSize: 10, color: dim)),
+        ],
+      ),
+    );
+  }
 }
 
 class _ColDivider extends StatelessWidget {
@@ -979,7 +1000,7 @@ class _ShapDriversPanel extends StatelessWidget {
                         value: frac,
                         backgroundColor: isDark
                             ? const Color(0xFF1E2535)
-                            : const Color(0xFFECEFF5),
+                            : HGColors.bg2Light,
                         valueColor:
                             AlwaysStoppedAnimation<Color>(arrowColor),
                         minHeight: 5,

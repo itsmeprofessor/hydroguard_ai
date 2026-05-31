@@ -344,9 +344,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 2),
                     Text(
                       '${prefs.city} · HydroGuard',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: HGColors.mutedLight,
+                        color: isDark
+                            ? HGColors.mutedDark
+                            : HGColors.mutedLight,
                       ),
                     ),
                   ],
@@ -723,11 +725,11 @@ class _SettingsGroup extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
           child: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.8,
-              color: HGColors.mutedLight,
+              color: isDark ? HGColors.mutedDark : HGColors.mutedLight,
             ),
           ),
         ),
@@ -810,9 +812,11 @@ class _SettingsRow extends StatelessWidget {
                       if (subtitle != null)
                         Text(
                           subtitle!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: HGColors.mutedLight,
+                            color: isDark
+                                ? HGColors.mutedDark
+                                : HGColors.mutedLight,
                           ),
                         ),
                     ],

@@ -90,4 +90,35 @@ class HGColors {
       _         => monitorSoft,
     };
   }
+
+  // Missing dark-mode soft backgrounds
+  static const Color blueSoftDark    = Color(0xFF0F1D3A);
+  static const Color violetSoftDark  = Color(0xFF1F1741);
+  static const Color evacSoftDark    = Color(0xFF350D0D);
+}
+
+/// BuildContext extension — use these instead of manual isDark checks.
+/// Example: Text('hello', style: TextStyle(color: context.hgText))
+extension HGTheme on BuildContext {
+  bool get isDark => Theme.of(this).brightness == Brightness.dark;
+
+  // Primary surfaces
+  Color get hgBg     => isDark ? HGColors.bgDark    : HGColors.bgLight;
+  Color get hgBg2    => isDark ? HGColors.bg2Dark   : HGColors.bg2Light;
+  Color get hgCard   => isDark ? HGColors.cardDark  : HGColors.cardLight;
+
+  // Text
+  Color get hgText   => isDark ? HGColors.textDark  : HGColors.textLight;
+  Color get hgText2  => isDark ? HGColors.textDark  : HGColors.text2Light;
+  Color get hgMuted  => isDark ? HGColors.mutedDark : HGColors.mutedLight;
+  Color get hgDim    => isDark ? HGColors.dimDark   : HGColors.dimLight;
+
+  // Dividers
+  Color get hgLine   => isDark ? HGColors.lineDark  : HGColors.lineLight;
+
+  // Soft scenario backgrounds (auto dark/light)
+  Color get hgBlueSoft   => isDark ? HGColors.blueSoftDark   : HGColors.blueSoft;
+  Color get hgVioletSoft => isDark ? HGColors.violetSoftDark : HGColors.violetSoft;
+
+  Color hgSoft(String scenario) => HGColors.softForScenario(scenario, dark: isDark);
 }

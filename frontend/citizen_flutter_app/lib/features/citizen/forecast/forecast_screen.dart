@@ -438,7 +438,7 @@ class _CityCompareSection extends StatelessWidget {
                         minHeight: 8,
                         backgroundColor: isDark
                             ? const Color(0xFF1E2535)
-                            : const Color(0xFFECEFF5),
+                            : HGColors.bg2Light,
                         valueColor: AlwaysStoppedAnimation<Color>(color),
                       ),
                     ),

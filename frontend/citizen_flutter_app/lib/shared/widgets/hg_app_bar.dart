@@ -34,10 +34,12 @@ class HGAppBar extends StatelessWidget implements PreferredSizeWidget {
                 children: [
                   Text(
                     eyebrow,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
-                        color: HGColors.mutedLight),
+                        color: isDark
+                            ? HGColors.mutedDark
+                            : HGColors.mutedLight),
                   ),
                   Text(
                     title,
