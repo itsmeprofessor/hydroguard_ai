@@ -235,7 +235,7 @@ class _AdminMoreScreenState extends ConsumerState<AdminMoreScreen> {
                           // Health status pill
                           healthAsync.when(
                             data: (h) {
-                              final isOk = h.status == 'ok';
+                              final isOk = h.status == 'ok' || h.status == 'healthy';
                               final col  = isOk
                                   ? HGColors.safe
                                   : HGColors.watch;
