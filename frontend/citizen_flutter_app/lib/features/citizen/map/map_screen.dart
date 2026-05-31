@@ -107,7 +107,7 @@ class CitizenMapScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: const Text(
-                      'Real tile map · shelter POIs are illustrative',
+                      'Tap any pin to see safety point details.',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 11,

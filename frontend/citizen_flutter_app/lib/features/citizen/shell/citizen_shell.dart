@@ -20,7 +20,7 @@ class CitizenShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final location   = GoRouterState.of(context).matchedLocation;
     final idx        = _tabs.indexWhere((t) => location.startsWith(t.path));
-    final currentIdx = idx < 0 ? 0 : idx;
+    final currentIdx = idx; // -1 means no active tab (e.g. /citizen/alerts)
     final isDark     = Theme.of(context).brightness == Brightness.dark;
     final isAdmin    = ref.watch(authProvider).isAdmin;
 

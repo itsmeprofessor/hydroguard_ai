@@ -19,6 +19,16 @@ const _cityCoords = {
   'gilgit':     LatLng(35.9022, 74.3085),
 };
 
+const _cityCodes = {
+  'islamabad':  'ISL',
+  'karachi':    'KAR',
+  'lahore':     'LAH',
+  'peshawar':   'PES',
+  'quetta':     'QUE',
+  'gilgit':     'GIL',
+  'rawalpindi': 'RWP',
+};
+
 // Shelter POIs (representative)
 const _shelters = [
   (name: 'Flood Relief Camp Alpha', pos: LatLng(33.720, 73.060)),
@@ -79,15 +89,40 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen> {
                       if (pos == null) return null;
                       final color =
                           HGColors.forScenario(c.levelKey);
+                      final code = _cityCodes[c.slug] ??
+                          c.slug.substring(0, 3).toUpperCase();
                       return Marker(
                         point: pos,
-                        width: 48,
-                        height: 48,
+                        width: 56,
+                        height: 56,
                         child: GestureDetector(
                           onTap: () =>
                               setState(() => _selected = c),
-                          child: _CityMarker(
-                              color: color, hri: c.hriScore),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.65),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  code,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Expanded(
+                                child: _CityMarker(
+                                    color: color, hri: c.hriScore),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     }).whereType<Marker>().toList(),
@@ -96,12 +131,37 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen> {
                 if (_showHri && cities.isEmpty)
                   MarkerLayer(
                     markers: _cityCoords.entries.map((e) {
-                      const color = HGColors.monitor;
+                      final code = _cityCodes[e.key] ??
+                          e.key.substring(0, 3).toUpperCase();
                       return Marker(
                         point: e.value,
-                        width: 44,
-                        height: 44,
-                        child: const _CityMarker(color: color, hri: 0),
+                        width: 56,
+                        height: 56,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                code,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Expanded(
+                              child: _CityMarker(
+                                  color: HGColors.monitor, hri: 0),
+                            ),
+                          ],
+                        ),
                       );
                     }).toList(),
                   ),
@@ -212,6 +272,61 @@ class _AdminMapScreenState extends ConsumerState<AdminMapScreen> {
               top: 72,
               right: 12,
               child: _AdminBadge(),
+            ),
+
+            // Risk level legend (bottom-left)
+            Positioned(
+              bottom: 200,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 8),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Risk level',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0B1220))),
+                    const SizedBox(height: 6),
+                    ...[
+                      ('Safe',    const Color(0xFF22C55E)),
+                      ('Watch',   const Color(0xFFEAB308)),
+                      ('Warning', const Color(0xFFF97316)),
+                      ('Severe',  const Color(0xFFEF4444)),
+                    ].map((e) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                  color: e.$2,
+                                  shape: BoxShape.circle)),
+                          const SizedBox(width: 6),
+                          Text(e.$1,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF0B1220))),
+                        ],
+                      ),
+                    )),
+                  ],
+                ),
+              ),
             ),
 
             // Selected city bottom sheet inline

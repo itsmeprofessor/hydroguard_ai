@@ -25,6 +25,23 @@ String _conditionLabel(String levelKey, int? chanceRain, int? eventProb) {
   return 'Clear';
 }
 
+String _daySubLabel(ForecastDayModel day) {
+  if ((day.eventProb ?? 0) > 0) {
+    return '${day.eventProb}% flood probability';
+  }
+  if ((day.chanceRain ?? 0) > 0) {
+    return '${day.chanceRain}% chance of rain';
+  }
+  // Fall back to risk band description
+  return switch (day.levelKey) {
+    'severe'  => 'High flood risk',
+    'warning' => 'Elevated flood risk',
+    'watch'   => 'Moderate risk',
+    'monitor' => 'Low risk — monitor',
+    _         => 'Low risk',
+  };
+}
+
 class ForecastScreen extends ConsumerWidget {
   const ForecastScreen({super.key});
 
@@ -299,11 +316,7 @@ class _ForecastDayRow extends StatelessWidget {
     final color = HGColors.forScenario(day.levelKey);
     final condition =
         _conditionLabel(day.levelKey, day.chanceRain, day.eventProb);
-    final probText = day.eventProb != null
-        ? '${day.eventProb}% flood probability'
-        : day.chanceRain != null
-            ? '${day.chanceRain}% chance of rain'
-            : '';
+    final probText = _daySubLabel(day);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

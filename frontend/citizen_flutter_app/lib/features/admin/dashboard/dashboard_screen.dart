@@ -27,6 +27,9 @@ class AdminDashboardScreen extends ConsumerWidget {
     final initials = _initials(authState.user?.username ?? 'A');
     final cityLabel = prefs.city.toLowerCase();
 
+    final elevatedCount = overviewAsync.valueOrNull
+        ?.where((c) => c.hriScore >= 20).length ?? 0;
+
     return Scaffold(
       backgroundColor: isDark ? HGColors.bgDark : HGColors.bgLight,
       body: SafeArea(
@@ -50,7 +53,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       // Hero KPI
                       healthAsync.when(
                         data: (h) => _HeroCard(health: h, timeStr: timeStr,
-                            isDark: isDark, countAsync: countAsync),
+                            isDark: isDark, elevatedCount: elevatedCount),
                         loading: () => const HGSkeleton(height: 160, borderRadius: 20),
                         error: (e, _) => HGErrorCard(
                             message: 'Health unavailable: $e'),
@@ -270,18 +273,17 @@ class _HeroCard extends StatelessWidget {
   final HealthModel health;
   final String timeStr;
   final bool isDark;
-  final AsyncValue<int> countAsync;
+  final int elevatedCount;
 
   const _HeroCard({
     required this.health,
     required this.timeStr,
     required this.isDark,
-    required this.countAsync,
+    required this.elevatedCount,
   });
 
   @override
   Widget build(BuildContext context) {
-    final count = countAsync.valueOrNull ?? 0;
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: Container(
@@ -343,11 +345,14 @@ class _HeroCard extends StatelessWidget {
                       children: [
                         Expanded(
                             child: _KpiItem(
-                          label: 'Active alerts',
-                          value: '$count',
-                          valueColor: count > 0
+                          label: 'Elevated Cities',
+                          subLabel: 'HRI ≥ 20',
+                          value: '$elevatedCount',
+                          valueColor: elevatedCount >= 3
                               ? HGColors.severe
-                              : HGColors.safe,
+                              : elevatedCount >= 1
+                                  ? HGColors.warning
+                                  : HGColors.safe,
                         )),
                         const VerticalDivider(
                             color: Color(0x30FFFFFF), width: 1),
@@ -408,6 +413,7 @@ class _DriftChip extends StatelessWidget {
 
 class _KpiItem extends StatelessWidget {
   final String label;
+  final String? subLabel;
   final String value;
   final Color valueColor;
 
@@ -415,6 +421,7 @@ class _KpiItem extends StatelessWidget {
     required this.label,
     required this.value,
     required this.valueColor,
+    this.subLabel,
   });
 
   @override
@@ -434,6 +441,14 @@ class _KpiItem extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 11,
                 color: Color(0xFF94A3B8))),
+        if (subLabel != null) ...[
+          const SizedBox(height: 2),
+          Text(subLabel!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF64748B))),
+        ],
       ],
     );
   }
