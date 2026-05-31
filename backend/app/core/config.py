@@ -34,7 +34,7 @@ DATA_DIR:        Path = BACKEND_DIR / "data"
 MODELS_DIR:      Path = BACKEND_DIR / "saved_models"
 CITY_MODELS_DIR: Path = MODELS_DIR / "city_models"
 LOGS_DIR:        Path = BACKEND_DIR / "logs"
-STATIC_DIR:   Path = BACKEND_DIR.parent / "frontend" / "web_dashboard" / "admin_dashboard"  # served as /static
+STATIC_DIR:   Path = BACKEND_DIR.parent / "frontend" / "citizen_flutter_app" / "build" / "web"  # Flutter web build
 
 for _d in (DATA_DIR, MODELS_DIR, LOGS_DIR):
     _d.mkdir(parents=True, exist_ok=True)

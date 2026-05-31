@@ -138,20 +138,8 @@ def create_app() -> FastAPI:
     except Exception as exc:
         logger.warning("Weather API routes unavailable: %s", exc)
 
-    # ── Citizen app static mount ──────────────────────────────────────────────
-    citizen_dir = STATIC_DIR.parent.parent / "citizen_app"
-    if citizen_dir.exists():
-        app.mount("/citizen", StaticFiles(directory=str(citizen_dir), html=True), name="citizen")
-
-    @app.get("/citizen-app", include_in_schema=False)
-    async def serve_citizen():
-        index = citizen_dir / "index.html"
-        if index.exists():
-            return FileResponse(str(index))
-        return JSONResponse({"error": "Citizen app not found"}, status_code=404)
-
     # ── Flutter citizen app static mount ──────────────────────────────────────
-    flutter_dir = STATIC_DIR.parent.parent / "citizen_flutter_app" / "build" / "web"
+    flutter_dir = STATIC_DIR  # frontend/citizen_flutter_app/build/web (set in config.py)
     if flutter_dir.exists():
         app.mount("/flutter", StaticFiles(directory=str(flutter_dir), html=True), name="flutter")
         logger.info("Flutter citizen app mounted at /flutter")
