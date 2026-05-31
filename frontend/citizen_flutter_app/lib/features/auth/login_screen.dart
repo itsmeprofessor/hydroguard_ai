@@ -278,8 +278,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         TextField(
           controller: ctrl,
           keyboardType: keyboardType,
+          style: const TextStyle(color: Color(0xFF0B1220)), // always dark text — card is always white
           decoration: InputDecoration(
             prefixIcon: Icon(icon, size: 18, color: HGColors.mutedLight),
+            hintStyle: TextStyle(color: Color(0xFF0B1220).withValues(alpha: 0.4)),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide:
@@ -317,7 +319,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         TextField(
           controller: _pwCtrl,
           obscureText: !_showPw,
+          style: const TextStyle(color: Color(0xFF0B1220)), // always dark text — card is always white
           decoration: InputDecoration(
+            hintStyle: TextStyle(color: Color(0xFF0B1220).withValues(alpha: 0.4)),
             prefixIcon: const Icon(Icons.lock_outline,
                 size: 18, color: HGColors.mutedLight),
             suffixIcon: IconButton(

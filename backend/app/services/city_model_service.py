@@ -973,6 +973,18 @@ class CityModelService:
         _wx_sev    = 0.50 * _prcp_norm + 0.30 * _hum_norm + 0.20 * _pres_norm
         _hri_raw   = 0.40 * float(p_calib) + 0.60 * _wx_sev
         hri_score  = int(round(min(_hri_raw, 1.0) * 100))
+
+        # ---- Override risk band from HRI score ----
+        # p_calib-based thresholds fail during off-monsoon seasons: the
+        # IsotonicCalibrator outputs p_calib ≈ 0 for all summer inputs even
+        # with extreme weather parameters (120mm rain, 98% humidity).
+        # HRI already blends ML probability + weather severity + regional
+        # vulnerability — use it as the canonical risk band source.
+        if hri_score < 20:   risk_band = "Low"
+        elif hri_score < 50: risk_band = "Moderate"
+        elif hri_score < 75: risk_band = "High"
+        else:                risk_band = "Severe"
+
         alert_tier  = self._compute_alert_tier(p_calib, alert_threshold)
 
         # Two-tier alert semantics — additive fields, backward compat preserved

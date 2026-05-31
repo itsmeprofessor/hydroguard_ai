@@ -190,7 +190,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                 Text('$cityLabel command',
                     style: TextStyle(
                         fontSize: 15,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: textColor)),
               ],
             ),

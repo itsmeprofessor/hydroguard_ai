@@ -1,14 +1,13 @@
 import 'dart:math' as math;
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../models/city_risk_model.dart';
 import '../../../models/forecast_day_model.dart';
-import '../../../models/alert_item_model.dart';
 import '../../../shared/providers/auth_provider.dart';
 import '../../../shared/providers/city_provider.dart';
+import '../../../shared/providers/prefs_provider.dart';
 import '../../../shared/widgets/hg_error_card.dart';
 import '../../../shared/widgets/hg_skeleton.dart';
 import '../../../shared/widgets/severity_ladder.dart';
@@ -51,7 +50,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final slug = ref.watch(currentCitySlugProvider);
     final riskAsync = ref.watch(cityRiskProvider(slug));
     final forecastAsync = ref.watch(forecastProvider(slug));
-    final alerts = ref.watch(alertsProvider(slug));
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? HGColors.bgDark : HGColors.bgLight;
 
@@ -83,8 +81,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 _HeroSection(risk: risk),
                 const SizedBox(height: 12),
                 _LiveWeatherCard(risk: risk),
-                const SizedBox(height: 12),
-                _RiskTrajectoryCard(risk: risk, alerts: alerts),
                 const SizedBox(height: 12),
                 if (risk.alertTier >= 3 && risk.drivers.isNotEmpty)
                   _ShapDriversPanel(risk: risk),
@@ -164,18 +160,21 @@ class _AppBarRow extends ConsumerWidget {
               children: [
                 Text('Good day ·',
                     style: TextStyle(fontSize: 11, color: muted)),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(risk.city,
-                        style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: textColor)),
-                    const SizedBox(width: 4),
-                    Icon(Icons.keyboard_arrow_down_rounded,
-                        size: 18, color: muted),
-                  ],
+                GestureDetector(
+                  onTap: () => _showCityPicker(context, ref),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(risk.city,
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: textColor)),
+                      const SizedBox(width: 4),
+                      Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 18, color: muted),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -211,6 +210,99 @@ class _AppBarRow extends ConsumerWidget {
       ),
     );
   }
+}
+
+// ─── City picker ──────────────────────────────────────────────────────────────
+
+void _showCityPicker(BuildContext context, WidgetRef ref) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) {
+      final isDark = Theme.of(ctx).brightness == Brightness.dark;
+      final citiesAsync = ref.watch(citiesListProvider);
+      final currentCity = ref.read(prefsProvider).city;
+      return Container(
+        height: MediaQuery.of(ctx).size.height * 0.6,
+        decoration: BoxDecoration(
+          color: isDark ? HGColors.cardDark : HGColors.cardLight,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? HGColors.lineDark : HGColors.lineLight,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Row(
+                children: [
+                  Text(
+                    'Select City',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? HGColors.textDark : HGColors.textLight,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                    color: isDark ? HGColors.mutedDark : HGColors.mutedLight,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: citiesAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (_, __) =>
+                    const Center(child: Text('Could not load cities')),
+                data: (cities) => ListView.builder(
+                  itemCount: cities.length,
+                  itemBuilder: (_, i) {
+                    final name = cities[i]['name'] as String? ?? '';
+                    final isSelected = name == currentCity;
+                    return ListTile(
+                      title: Text(
+                        name,
+                        style: TextStyle(
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: isSelected
+                              ? HGColors.blue
+                              : (isDark
+                                  ? HGColors.textDark
+                                  : HGColors.textLight),
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? const Icon(Icons.check_rounded,
+                              color: HGColors.blue)
+                          : null,
+                      onTap: () {
+                        ref.read(prefsProvider.notifier).setCity(name);
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 // ─── Hero section ─────────────────────────────────────────────────────────────
@@ -395,7 +487,7 @@ class _HeroSection extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'HydroGuard ML · forecast confidence',
+                        'HydroGuard ML · model stability',
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -431,6 +523,14 @@ class _HeroSection extends StatelessWidget {
                     valueColor:
                         const AlwaysStoppedAnimation<Color>(HGColors.blue),
                     minHeight: 5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${risk.confidencePct}% confidence · HRI ${risk.hriScore}/100 · v3.3',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? HGColors.mutedDark : HGColors.mutedLight,
                   ),
                 ),
               ],
@@ -669,249 +769,6 @@ class _WeatherStat extends StatelessWidget {
                   color: textColor)),
         ],
       ),
-    );
-  }
-}
-
-// ─── Risk trajectory card ─────────────────────────────────────────────────────
-
-class _RiskTrajectoryCard extends StatelessWidget {
-  final CityRiskModel risk;
-  final List<AlertItemModel> alerts;
-  const _RiskTrajectoryCard({required this.risk, required this.alerts});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? HGColors.cardDark : HGColors.cardLight;
-    final textColor = isDark ? HGColors.textDark : HGColors.textLight;
-    final muted = isDark ? HGColors.mutedDark : HGColors.mutedLight;
-    final lineColor = HGColors.forScenario(risk.levelKey);
-
-    final rng = math.Random(42);
-    List<double> pastValues;
-    if (alerts.length >= 2) {
-      pastValues = alerts.reversed
-          .take(6)
-          .map((a) => a.hriScore.toDouble())
-          .toList();
-      while (pastValues.length < 6) {
-        pastValues.insert(
-            0,
-            (risk.hriScore + rng.nextInt(10) - 5)
-                .clamp(0, 100)
-                .toDouble());
-      }
-    } else {
-      pastValues = List.generate(6, (i) {
-        final jitter = rng.nextInt(12) - 6;
-        return (risk.hriScore - (5 - i) * 2 + jitter)
-            .clamp(0, 100)
-            .toDouble();
-      });
-    }
-
-    final nowValue = risk.hriScore.toDouble();
-    final delta = pastValues.length >= 2
-        ? pastValues.last - pastValues[pastValues.length - 2]
-        : 0.0;
-    final proj = List.generate(
-        3, (i) => (nowValue + delta * (i + 1)).clamp(0.0, 100.0));
-
-    final allSpots = <FlSpot>[];
-    for (var i = 0; i < pastValues.length; i++) {
-      allSpots.add(FlSpot(i.toDouble(), pastValues[i]));
-    }
-    allSpots.add(FlSpot(pastValues.length.toDouble(), nowValue));
-    final projStart = pastValues.length.toDouble();
-    final projSpots = <FlSpot>[
-      FlSpot(projStart, nowValue),
-      for (var i = 0; i < proj.length; i++)
-        FlSpot(projStart + i + 1, proj[i]),
-    ];
-    final bandHi =
-        projSpots.map((s) => FlSpot(s.x, (s.y + 8).clamp(0, 100))).toList();
-    final bandLo =
-        projSpots.map((s) => FlSpot(s.x, (s.y - 8).clamp(0, 100))).toList();
-
-    final maxX = projStart + proj.length;
-    final deltaInt = (risk.hriScore - pastValues.first).round();
-    final deltaLabel = deltaInt >= 0 ? '+$deltaInt' : '$deltaInt';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: isDark ? HGColors.lineDark : HGColors.lineLight),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Risk trajectory',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: muted,
-                            fontWeight: FontWeight.w500)),
-                    Text('HRI over time',
-                        style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: textColor)),
-                  ],
-                ),
-                const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: HGColors.softForScenario(risk.levelKey,
-                        dark: isDark),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'HRI $deltaLabel',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: lineColor),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 140,
-              child: LineChart(
-                LineChartData(
-                  minY: 0,
-                  maxY: 100,
-                  minX: 0,
-                  maxX: maxX,
-                  clipData: const FlClipData.all(),
-                  gridData: FlGridData(
-                    drawHorizontalLine: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: 25,
-                    getDrawingHorizontalLine: (_) => FlLine(
-                      color: (isDark
-                              ? HGColors.lineDark
-                              : HGColors.lineLight)
-                          .withValues(alpha: 0.5),
-                      strokeWidth: 1,
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: const FlTitlesData(show: false),
-                  betweenBarsData: [
-                    BetweenBarsData(
-                      fromIndex: 1,
-                      toIndex: 2,
-                      color: lineColor.withValues(alpha: 0.12),
-                    ),
-                  ],
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: allSpots,
-                      isCurved: true,
-                      color: lineColor,
-                      barWidth: 2.5,
-                      dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (spot, _, __, i) {
-                          final isNow = i == allSpots.length - 1;
-                          return FlDotCirclePainter(
-                            radius: isNow ? 5 : 3,
-                            color: isNow ? lineColor : Colors.white,
-                            strokeColor: lineColor,
-                            strokeWidth: 2,
-                          );
-                        },
-                      ),
-                    ),
-                    LineChartBarData(
-                      spots: projSpots,
-                      isCurved: true,
-                      color: lineColor.withValues(alpha: 0.5),
-                      barWidth: 2,
-                      dashArray: [6, 4],
-                      dotData: const FlDotData(show: false),
-                    ),
-                    LineChartBarData(
-                      spots: bandHi,
-                      isCurved: true,
-                      color: Colors.transparent,
-                      barWidth: 0,
-                      dotData: const FlDotData(show: false),
-                    ),
-                    LineChartBarData(
-                      spots: bandLo,
-                      isCurved: true,
-                      color: Colors.transparent,
-                      barWidth: 0,
-                      dotData: const FlDotData(show: false),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _LegendSwatch(color: lineColor, label: 'Past · now'),
-                const SizedBox(width: 12),
-                _LegendSwatch(
-                    color: lineColor.withValues(alpha: 0.5),
-                    label: 'Projection',
-                    dashed: true),
-                const SizedBox(width: 12),
-                _LegendSwatch(
-                    color: lineColor.withValues(alpha: 0.18),
-                    label: 'Confidence band',
-                    filled: true),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LegendSwatch extends StatelessWidget {
-  final Color color;
-  final String label;
-  final bool dashed;
-  final bool filled;
-  const _LegendSwatch(
-      {required this.color,
-      required this.label,
-      this.dashed = false,
-      this.filled = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final muted = isDark ? HGColors.mutedDark : HGColors.mutedLight;
-    return Row(
-      children: [
-        Container(
-          width: 20,
-          height: filled ? 10 : 3,
-          decoration:
-              BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
-        ),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 10, color: muted)),
-      ],
     );
   }
 }
